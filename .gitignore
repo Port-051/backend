@@ -1,0 +1,36 @@
+# 비밀값 — 절대 커밋하지 않는다 (Riot / PUBG / Steam / Discord API 키)
+.env
+.env.*
+*.local
+secrets/
+*.pem
+*.key
+
+# Java / Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+out/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+
+# 로그·측정 산출물
+logs/
+*.log
+results/**/raw/
