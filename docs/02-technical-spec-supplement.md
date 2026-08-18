@@ -98,6 +98,8 @@ party(id, queue, target_size, start_at, end_at, status, purpose, voice_party)
 party_member(party_id, request_id, user_id, position, joined_at,
              left_at, leave_reason)
 user_busy_interval(user_id, during, party_id)
+party_rating(party_id, rater_id, ratee_id, verdict, rated_at)
+user_relation(user_id, other_id, kind, updated_at)   -- kind: REUNION | BLOCK
 notification_job(id, party_id, user_id, kind, fire_at, status, dedup_key)
 ```
 
@@ -114,6 +116,11 @@ notification_job(id, party_id, user_id, kind, fire_at, status, dedup_key)
 
 `party.purpose`·`party.voice_party`는 빈자리 지원 자격 판정(기능 명세 7.4)이
 "파티의 합의된 목적"과 "파티가 음성 파티인지"를 요구하기 때문에 필요하다.
+
+`user_relation`은 재회·차단(기능 명세 7.7)을 담는다. 매칭 실행 중에는 읽기만 하므로
+**결정적 FCFS의 입력 불변성을 깨지 않는다.** 평가는 파티 완료 후에만 쓰이고,
+진행 중인 매칭의 후보 순서를 실행 도중 바꾸지 않는다.
+`(rater_id, ratee_id, party_id)`에 유니크 제약을 걸어 중복 평가를 막는다.
 
 ### INV-1 — 정원 초과 (문제 1)
 
