@@ -22,6 +22,9 @@ venv/
 node_modules/
 dist/
 
+# 로컬 플러그인 상태 (세션·감사 로그·토큰 원장) — 커밋하지 않는다
+.bkit/
+
 # IDE
 .idea/
 *.iml
