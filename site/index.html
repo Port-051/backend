@@ -1,0 +1,2930 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>party-matcher 백엔드 설계</title>
+<style>*,*::before,*::after{box-sizing:border-box}body{margin:0}</style>
+</head>
+<body>
+
+<style id="docstyle">
+  :root {
+    --paper:        #f8faf9;
+    --surface:      #ffffff;
+    --surface-2:    #eef3f2;
+    --ink:          #16241f;
+    --ink-2:        #5a6a6c;
+    --ink-3:        #8a999c;
+    --rule:         #e4eae8;
+    --rule-strong:  #cfd9d7;
+    --accent:       #0e6b6d;
+    --accent-ink:   #0a5254;
+    --accent-soft:  #e4f1f0;
+    --pass:         #1c7049;
+    --pass-soft:    #e6f4ec;
+    --fail:         #ab332c;
+    --warn:         #8a5714;
+    --warn-soft:    #f7efdf;
+
+    --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+                 "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+                 "Liberation Mono", monospace;
+
+    --measure: 47rem;
+    --wide: 60rem;
+  }
+
+  /* 밝은 단일 테마로 고정한다. 뷰어의 다크 모드 설정과 무관하게
+     항상 같은 지면으로 읽히도록 색상 토큰을 하나만 둔다. */
+
+  * { box-sizing: border-box; }
+
+  html { background: var(--paper); color-scheme: light; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 15.5px;
+    line-height: 1.78;
+    -webkit-font-smoothing: antialiased;
+    word-break: keep-all;
+  }
+
+  /* ---------- top bar ---------- */
+
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: color-mix(in srgb, var(--paper) 88%, transparent);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--rule);
+  }
+  .topbar-inner {
+    max-width: var(--wide);
+    margin: 0 auto;
+    padding: 0 1.5rem;
+    height: 58px;
+    display: flex;
+    align-items: center;
+    gap: 1.75rem;
+  }
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: .5rem;
+    font-weight: 800;
+    letter-spacing: -.015em;
+    white-space: nowrap;
+    color: var(--ink);
+    text-decoration: none;
+  }
+  .brand .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    align-self: center;
+    flex: none;
+  }
+  .brand .sub {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .navlinks {
+    display: flex;
+    gap: .15rem;
+    margin-left: auto;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .navlinks::-webkit-scrollbar { display: none; }
+  .navlinks a {
+    padding: .3rem .62rem;
+    border-radius: 999px;
+    font-size: 13.5px;
+    color: var(--ink-2);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background .14s, color .14s;
+  }
+  .navlinks a:hover { background: var(--surface-2); color: var(--ink); }
+  .navlinks a[aria-current="page"] {
+    background: var(--accent-soft);
+    color: var(--accent-ink);
+    font-weight: 700;
+  }
+
+  /* ---------- page shell ---------- */
+
+  .wrap { max-width: var(--wide); margin: 0 auto; padding: 0 1.5rem 5rem; }
+  .col  { max-width: var(--measure); }
+
+  .page { display: none; }
+  .page.is-open { display: block; animation: fade .18s ease-out; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  .page-head { padding: 4rem 0 2.4rem; border-bottom: 1px solid var(--rule); margin-bottom: 2.4rem; }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 1rem;
+  }
+  h1 {
+    font-size: clamp(2rem, 4.6vw, 2.6rem);
+    line-height: 1.16;
+    letter-spacing: -.03em;
+    font-weight: 800;
+    margin: 0 0 .8rem;
+    text-wrap: balance;
+    max-width: var(--measure);
+  }
+  .standfirst {
+    font-size: 1.04rem;
+    color: var(--ink-2);
+    margin: 0;
+    max-width: var(--measure);
+    text-wrap: pretty;
+  }
+
+  h2 {
+    font-size: 1.25rem;
+    font-weight: 750;
+    letter-spacing: -.022em;
+    margin: 2.8rem 0 .5rem;
+    text-wrap: balance;
+  }
+  .page-head + h2, .page-head + .col > h2:first-child { margin-top: 0; }
+  h3 {
+    font-size: 1rem;
+    font-weight: 750;
+    letter-spacing: -.012em;
+    margin: 2rem 0 .55rem;
+  }
+  .deck { color: var(--ink-2); font-size: .95rem; margin: 0 0 1.4rem; max-width: var(--measure); }
+  p { margin: 0 0 1rem; }
+  a { color: var(--accent-ink); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  strong { font-weight: 700; }
+
+  ul, ol { margin: 0 0 1rem; padding-left: 1.15rem; }
+  li { margin-bottom: .38rem; }
+  li::marker { color: var(--ink-3); }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: .855em;
+    background: var(--surface-2);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    padding: .08em .34em;
+    word-break: break-all;
+  }
+  .mono-num { font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+
+  /* ---------- callouts ---------- */
+
+  .note {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    padding: .85rem 1.1rem;
+    border-radius: 0 6px 6px 0;
+    margin: 0 0 1.25rem;
+    font-size: .93rem;
+    max-width: var(--measure);
+  }
+  .note p:last-child { margin-bottom: 0; }
+  .note .lead {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    font-weight: 700;
+    display: block;
+    margin-bottom: .3rem;
+  }
+
+  /* ---------- tables ---------- */
+
+  .tablewrap {
+    overflow-x: auto;
+    border: 1px solid var(--rule-strong);
+    border-radius: 9px;
+    background: var(--surface);
+    margin: 0 0 1.5rem;
+  }
+  table { border-collapse: collapse; width: 100%; font-size: .89rem; }
+  thead th {
+    text-align: left;
+    font-weight: 700;
+    font-size: .8rem;
+    color: var(--ink-2);
+    background: var(--surface-2);
+    padding: .62rem .85rem;
+    border-bottom: 1px solid var(--rule-strong);
+    white-space: nowrap;
+  }
+  tbody td {
+    padding: .62rem .85rem;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+    line-height: 1.6;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.id {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--accent-ink);
+    white-space: nowrap;
+  }
+  td.nowrap, th.nowrap { white-space: nowrap; }
+  .t-center { text-align: center; }
+
+  /* ---------- chips ---------- */
+
+  .chip {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    padding: .14em .5em;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .chip.p0 { background: var(--accent-soft); color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+  .chip.p1 { background: transparent; color: var(--ink-2); border-color: var(--rule-strong); }
+  .chip.star { background: var(--warn-soft); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 32%, transparent); }
+
+  .tally {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    padding: 1rem 1.15rem;
+    border: 1px solid var(--rule-strong);
+    border-radius: 9px;
+    background: var(--surface);
+    margin-bottom: 1.6rem;
+  }
+  .tally div { display: flex; flex-direction: column; gap: .1rem; }
+  .tally .k {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .tally .v { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+
+  /* ---------- doc cards (index) ---------- */
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: .7rem; margin: 0 0 1.5rem; }
+  .card {
+    display: block;
+    padding: 1rem 1.1rem;
+    border: 1px solid var(--rule-strong);
+    border-radius: 9px;
+    background: var(--surface);
+    text-decoration: none;
+    color: inherit;
+    transition: border-color .14s, transform .14s;
+  }
+  .card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .card .n {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: block;
+    margin-bottom: .3rem;
+  }
+  .card .t { font-weight: 750; letter-spacing: -.015em; display: block; margin-bottom: .2rem; }
+  .card .d { font-size: .85rem; color: var(--ink-2); line-height: 1.55; }
+
+  /* ---------- invariant gate board ---------- */
+
+  .gates { display: grid; gap: .7rem; margin: 0 0 1.5rem; }
+  .gate {
+    border: 1px solid var(--rule-strong);
+    border-left: 4px solid var(--fail);
+    border-radius: 8px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .gate-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: .55rem; padding: .8rem 1rem .55rem; }
+  .gate-id { font-family: var(--font-mono); font-weight: 700; font-size: .84rem; color: var(--fail); letter-spacing: .02em; }
+  .gate-title { font-weight: 700; font-size: .97rem; }
+  .gate-prob {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    white-space: nowrap;
+  }
+  .gate-body { padding: 0 1rem .5rem; font-size: .9rem; color: var(--ink-2); }
+  .gate details { border-top: 1px solid var(--rule); }
+  .gate summary {
+    padding: .5rem 1rem;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    cursor: pointer;
+    user-select: none;
+  }
+  .gate summary:hover { color: var(--ink); background: var(--surface-2); }
+  .gate pre {
+    margin: 0;
+    padding: .1rem 1rem 1rem;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: 12.2px;
+    line-height: 1.65;
+    color: var(--ink);
+  }
+  .gate .kw { color: var(--accent); font-weight: 600; }
+
+  .verdict {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .7rem 1rem;
+    border: 1px solid var(--rule-strong);
+    border-radius: 8px;
+    background: var(--pass-soft);
+    font-size: .9rem;
+    margin-bottom: 1.4rem;
+  }
+  .verdict b { color: var(--pass); font-family: var(--font-mono); font-size: .85rem; letter-spacing: .06em; white-space: nowrap; }
+
+  /* ---------- diagrams ---------- */
+
+
+  .dg {
+    border: 1px solid var(--rule-strong);
+    border-radius: 9px;
+    background: var(--surface);
+    padding: 1.5rem 1.25rem 1.1rem;
+    margin: 0 0 1rem;
+    overflow-x: auto;
+  }
+  .dg svg { display: block; min-width: 900px; width: 100%; height: auto; }
+  .dg-cap { font-size: .84rem; color: var(--ink-3); margin: 0 0 1.5rem; }
+
+  /* diagram primitives */
+  .d-band      { fill: var(--surface-2); }
+  .d-lane-lbl  { fill: var(--ink-3); font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: .17em; }
+  .d-box       { fill: var(--surface); stroke: var(--rule-strong); stroke-width: 1.1; }
+  .d-box-hot   { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+  .d-name      { fill: var(--ink); font-family: var(--font-sans); font-size: 12.5px; font-weight: 700; }
+  .d-sub       { fill: var(--ink-3); font-family: var(--font-mono); font-size: 9px; letter-spacing: .01em; }
+  .d-wire      { stroke: var(--rule-strong); stroke-width: 1.2; fill: none; }
+  .d-wire-evt  { stroke: var(--accent); stroke-width: 1.2; fill: none; stroke-dasharray: 5 3.5; }
+  .d-group     { fill: none; stroke: var(--rule-strong); stroke-width: 1; stroke-dasharray: 4 3.5; }
+  .d-group-lbl { fill: var(--ink-2); font-family: var(--font-sans); font-size: 11px; font-weight: 700; }
+  .d-chip      { fill: var(--surface); }
+  .d-title     { fill: var(--paper); font-family: var(--font-sans); font-size: 16px; font-weight: 800; letter-spacing: -.01em; }
+  .d-badge     { fill: var(--warn); }
+  .d-badge-t   { fill: #ffffff; font-family: var(--font-mono); font-size: 10px; font-weight: 700; }
+  .d-tag       { fill: var(--ink-3); font-family: var(--font-mono); font-size: 9px; letter-spacing: .08em; }
+  .d-titlebox  { fill: var(--ink); }
+  .d-rule      { fill: var(--ink); }
+  .d-note      { fill: var(--ink-2); font-family: var(--font-sans); font-size: 10.5px; }
+  .d-arrow     { fill: var(--rule-strong); }
+  .d-arrow-evt { fill: var(--accent); }
+
+  /* 곡선 간선 · 간선 라벨 · 저장소 실린더 · 인스턴스 2대 표시 */
+  .d-elbl {
+    fill: var(--ink-2);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: .01em;
+    paint-order: stroke;
+    stroke: var(--surface);
+    stroke-width: 4px;
+    stroke-linejoin: round;
+  }
+  .d-cyl       { fill: var(--surface); stroke: var(--rule-strong); stroke-width: 1.1; }
+  .d-box-obs   { fill: none; stroke: var(--rule-strong); stroke-width: 1; stroke-dasharray: 5 4; }
+  .d-band-soft { fill: var(--surface-2); opacity: .5; }
+  .d-band-lbl  { fill: var(--ink-3); font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: .1em; }
+  .d-x2bg    { fill: var(--accent-soft); }
+  .d-x2      { fill: var(--accent-ink); font-family: var(--font-mono); font-size: 9px; font-weight: 700; }
+  .d-wire, .d-wire-evt { stroke-linecap: round; }
+  .d-wire-evt { animation: dgflow 2.6s linear infinite; }
+  @keyframes dgflow { to { stroke-dashoffset: -34; } }
+  @media (prefers-reduced-motion: reduce) { .d-wire-evt { animation: none; } }
+
+  /* diagram legend */
+  .dg-key { display: grid; gap: .55rem; margin: 0 0 1.5rem; }
+  .dg-key-row {
+    display: grid;
+    grid-template-columns: 1.5rem 1fr;
+    gap: .75rem;
+    align-items: start;
+    font-size: .89rem;
+  }
+  .dg-key-row .b {
+    width: 1.5rem; height: 1.5rem;
+    border-radius: 50%;
+    background: var(--warn);
+    color: #fff;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+  }
+  .dg-key-row p { margin: 0; }
+  .dg-key-row .h { font-weight: 700; }
+  .dg-strokes { display: flex; flex-wrap: wrap; gap: 1.4rem; font-size: .84rem; color: var(--ink-2); margin: 0 0 1.5rem; }
+  .dg-strokes span { display: flex; align-items: center; gap: .45rem; }
+  .dg-strokes i { display: block; width: 2rem; height: 0; border-top: 1.4px solid var(--rule-strong); }
+  .dg-strokes i.evt { border-top: 1.4px dashed var(--accent); }
+
+  /* ---------- 엔터티 사전 ---------- */
+
+  .d-wire-key { stroke: var(--accent); stroke-width: 1.6; fill: none; stroke-linecap: round; }
+
+  .ents { display: grid; grid-template-columns: repeat(auto-fill, minmax(17.5rem, 1fr)); gap: .7rem; margin: 0 0 1.5rem; align-items: start; }
+  .ent { border: 1px solid var(--rule-strong); border-radius: 9px; background: var(--surface); overflow: hidden; }
+  .ent.key { border-color: var(--accent); }
+  .ent h4 {
+    margin: 0;
+    padding: .55rem .85rem;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--rule);
+    font-family: var(--font-mono);
+    font-size: .81rem;
+    font-weight: 700;
+    color: var(--accent-ink);
+    display: flex;
+    align-items: baseline;
+    gap: .6rem;
+  }
+  .ent.key h4 { background: var(--accent-soft); }
+  .ent h4 em {
+    font-family: var(--font-sans);
+    font-style: normal;
+    font-size: .74rem;
+    font-weight: 500;
+    color: var(--ink-3);
+    margin-left: auto;
+    white-space: nowrap;
+  }
+  .ent dl { margin: 0; padding: .5rem .85rem .7rem; display: grid; grid-template-columns: auto 1fr; gap: .16rem .7rem; }
+  .ent dt { font-family: var(--font-mono); font-size: .75rem; color: var(--ink); white-space: nowrap; }
+  .ent dd { margin: 0; color: var(--ink-3); font-size: .76rem; line-height: 1.5; min-width: 0; }
+  .ent dd strong { color: var(--ink); }
+  .kk {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    padding: 0 .3em;
+    margin-left: .25em;
+    border-radius: 3px;
+    border: 1px solid;
+    vertical-align: 1px;
+    letter-spacing: .04em;
+  }
+  .kk.pk { color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent) 40%, transparent); background: var(--accent-soft); }
+  .kk.fk { color: var(--ink-2); border-color: var(--rule-strong); background: var(--surface); }
+  .kk.uk { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); background: var(--warn-soft); }
+
+  @media (max-width: 560px) {
+    .ent dl { grid-template-columns: 1fr; gap: .05rem; }
+    .ent dd { margin-bottom: .3rem; }
+  }
+
+  /* ---------- prd flow ---------- */
+
+  .flow { display: grid; gap: .5rem; margin: 0 0 1.5rem; }
+  .flow-trigger {
+    padding: .75rem 1.05rem;
+    border-left: 3px solid var(--warn);
+    background: var(--warn-soft);
+    border-radius: 0 7px 7px 0;
+    font-weight: 700;
+    font-size: .95rem;
+    color: var(--warn);
+  }
+  .flow-gap {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: .14em;
+    color: var(--ink-3);
+    padding-left: 1.1rem;
+  }
+  .flow-step {
+    display: grid;
+    grid-template-columns: 2.1rem 1fr;
+    gap: .9rem;
+    padding: .75rem 1.05rem;
+    border: 1px solid var(--rule-strong);
+    border-radius: 8px;
+    background: var(--surface);
+  }
+  .flow-step .k {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: .06em;
+    line-height: 1.7;
+  }
+  .flow-step .t { font-weight: 700; }
+  .flow-step .d { display: block; color: var(--ink-2); font-size: .9rem; margin-top: .05rem; }
+
+  .goals { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 0 0 1.5rem; }
+  .goals ul { margin: .3rem 0 0; padding-left: 1.05rem; font-size: .93rem; color: var(--ink-2); }
+  .goals li { margin-bottom: .35rem; }
+  @media (max-width: 720px) { .goals { grid-template-columns: 1fr; } }
+
+  /* ---------- outcome lines ---------- */
+
+  .rlines { display: grid; gap: .7rem; margin: 0 0 1.2rem; counter-reset: rl; }
+  .rline {
+    display: grid;
+    grid-template-columns: 2rem 1fr;
+    gap: .9rem;
+    padding: .95rem 1.05rem;
+    border: 1px solid var(--rule-strong);
+    border-radius: 8px;
+    background: var(--surface);
+  }
+  .rline::before {
+    counter-increment: rl;
+    content: counter(rl);
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--accent);
+    line-height: 1.5;
+  }
+  .rline p { margin: 0; font-size: .93rem; }
+  .rline .metric { font-weight: 700; color: var(--ink); }
+  .rline .tag {
+    display: inline-block;
+    margin-top: .4rem;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  /* ---------- pager ---------- */
+
+  .pager {
+    display: flex;
+    gap: .7rem;
+    margin-top: 3.2rem;
+    padding-top: 1.6rem;
+    border-top: 1px solid var(--rule);
+  }
+  .pager a {
+    flex: 1 1 0;
+    padding: .85rem 1rem;
+    border: 1px solid var(--rule-strong);
+    border-radius: 8px;
+    background: var(--surface);
+    text-decoration: none;
+    color: inherit;
+    transition: border-color .14s;
+    min-width: 0;
+  }
+  .pager a:hover { border-color: var(--accent); }
+  .pager a.next { text-align: right; }
+  .pager .k {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-bottom: .12rem;
+  }
+  .pager .t { font-weight: 700; letter-spacing: -.015em; font-size: .95rem; }
+  .pager .spacer { flex: 1 1 0; }
+
+  footer.site {
+    max-width: var(--wide);
+    margin: 0 auto;
+    padding: 1.6rem 1.5rem 3rem;
+    border-top: 1px solid var(--rule);
+    font-size: .84rem;
+    color: var(--ink-3);
+  }
+
+  a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, .page.is-open { transition: none !important; animation: none !important; }
+  }
+
+  @media (max-width: 720px) {
+    .topbar-inner { gap: 1rem; }
+    .brand .sub { display: none; }
+    .page-head { padding-top: 2.6rem; }
+    .rline { grid-template-columns: 1.4rem 1fr; gap: .7rem; }
+    .pager { flex-direction: column; }
+  }
+
+  /* ---------- 공동 편집 ---------- */
+
+  .tools { display: flex; align-items: center; gap: .4rem; flex: none; margin-left: .8rem; }
+  .tools button {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: .38rem .72rem;
+    border-radius: 999px;
+    border: 1px solid var(--rule-strong);
+    background: var(--surface);
+    color: var(--ink-2);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color .14s, color .14s;
+  }
+  .tools button:hover { border-color: var(--accent); color: var(--accent-ink); }
+  .tools button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tools button.primary:hover { color: #fff; }
+  .tools button[disabled] { opacity: .5; cursor: default; }
+  .tools .ro {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    white-space: nowrap;
+  }
+
+  [hidden] { display: none !important; }
+
+  /* 편집 중에는 지면 색을 바꿔, 읽는 중인지 고치는 중인지 헷갈리지 않게 한다. */
+  body[data-mode="edit"] { background: #fdfaf2; }
+  body[data-mode="edit"] .page { padding-bottom: 3.5rem; }
+  body[data-mode="edit"] [contenteditable="true"]:focus { outline: none; }
+
+  .docctl {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+    flex-wrap: wrap;
+    margin: 1.5rem 0 -1rem;
+  }
+  .docctl button {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: .3rem .68rem;
+    border-radius: 999px;
+    border: 1px solid var(--rule-strong);
+    background: var(--surface);
+    color: var(--ink-2);
+    cursor: pointer;
+  }
+  .docctl button:hover { border-color: var(--fail); color: var(--fail); }
+  .docctl .hint { font-size: .82rem; color: var(--ink-3); }
+
+  /* 숨긴 문서 — 내용은 남고 목차·상단 메뉴에서만 빠진다. 편집 중에는 취소선으로 보인다. */
+  .navlinks a.is-off, .card.is-off { display: none; }
+  body[data-mode="edit"] .navlinks a.is-off { display: inline-block; text-decoration: line-through; opacity: .5; }
+  body[data-mode="edit"] .card.is-off { display: block; opacity: .5; }
+  body[data-mode="edit"] .card.is-off .t { text-decoration: line-through; }
+  body[data-mode="edit"] .page.doc-off .page-head { opacity: .62; }
+
+  .editbar, .restorebar {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    flex-wrap: wrap;
+    padding: .72rem 1.15rem;
+    font-size: .88rem;
+    line-height: 1.5;
+    background: var(--ink);
+    color: var(--paper);
+  }
+  .editbar[data-tone="warn"] { background: var(--fail); }
+  .editbar[data-tone="ok"] { background: var(--pass); }
+  .restorebar { background: var(--warn); }
+  .restorebar button {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: .3rem .7rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, .55);
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+  }
+  .restorebar button:hover { background: rgba(255, 255, 255, .16); }
+
+  @media (max-width: 720px) {
+    .tools { margin-left: .4rem; }
+    .tools button { padding: .34rem .58rem; font-size: 10px; }
+  }
+</style>
+
+<nav class="topbar" id="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#/index"><span class="dot"></span>party-matcher<span class="sub">Backend</span></a>
+    <div class="navlinks">
+      <a href="#/index">문서맵</a>
+      <a href="#/prd">PRD</a>
+      <a href="#/overview">개요</a>
+      <a href="#/problem">문제 정의</a>
+      <a href="#/system">아키텍처</a>
+      <a href="#/features">기능 명세</a>
+      <a href="#/invariants">불변식</a>
+      <a href="#/data">데이터 모델</a>
+      <a href="#/milestones">마일스톤</a>
+      <a href="#/metrics">측정</a>
+      <a href="#/risks">리스크</a>
+      <a href="#/outcome">결과물</a>
+    </div>
+      <div class="tools">
+        <button type="button" id="ed-start" hidden>편집</button>
+        <button type="button" id="ed-save" class="primary" hidden>저장</button>
+        <button type="button" id="ed-cancel" hidden>취소</button>
+      </div>
+  </div>
+</nav>
+
+<div class="wrap" id="wrap">
+
+  <!-- ============ INDEX ============ -->
+  <article class="page" id="page-index">
+    <div class="page-head">
+      <p class="eyebrow">party-matcher · Port-051</p>
+      <h1>파티 매칭 백엔드 설계</h1>
+      <p class="standfirst">
+        조건이 맞는 사람을 서버가 묶어 확정하는 배정 시스템. 리그 오브 레전드 파티 매칭이 도메인이고,
+        실제 과제는 좌석 경합·중복 배정·배치 멱등성이다.
+      </p>
+    </div>
+
+    <p class="deck">
+      열한 개 문서로 나뉜다. 순서대로 읽으면 <strong>왜 만드는가</strong>에서 <strong>무엇을 만드는가</strong>를 거쳐
+      <strong>무엇이 깨지면 실패로 보는가</strong>로 좁혀진다.
+    </p>
+
+    <div class="cards">
+      <a class="card" href="#/prd">
+        <span class="n">Doc 00</span><span class="t">PRD</span>
+        <span class="d">왜 · 누구 · 언제. 격발 시점과 기존 경로 분석</span>
+      </a>
+      <a class="card" href="#/overview">
+        <span class="n">Doc 01</span><span class="t">개요</span>
+        <span class="d">문제·해결·MVP 범위. 왜 롤 하나만 지원하는가</span>
+      </a>
+      <a class="card" href="#/problem">
+        <span class="n">Doc 02</span><span class="t">문제 정의</span>
+        <span class="d">풀어야 하는 일곱 가지와 그중 핵심 둘</span>
+      </a>
+      <a class="card" href="#/system">
+        <span class="n">Doc 03</span><span class="t">아키텍처</span>
+        <span class="d">아키텍처 한 장, 경합 지점 3곳</span>
+      </a>
+      <a class="card" href="#/features">
+        <span class="n">Doc 04</span><span class="t">기능 명세</span>
+        <span class="d">A1~I6 · 55개 기능과 우선순위</span>
+      </a>
+      <a class="card" href="#/invariants">
+        <span class="n">Doc 05</span><span class="t">불변식</span>
+        <span class="d">INV-1~5 통과 게이트와 검출 SQL</span>
+      </a>
+      <a class="card" href="#/data">
+        <span class="n">Doc 06</span><span class="t">데이터 모델</span>
+        <span class="d">테이블 15개와 불변식이 박히는 제약</span>
+      </a>
+      <a class="card" href="#/milestones">
+        <span class="n">Doc 07</span><span class="t">마일스톤</span>
+        <span class="d">M0~M6 · 각 단계의 완성 서사 한 문장</span>
+      </a>
+      <a class="card" href="#/metrics">
+        <span class="n">Doc 08</span><span class="t">측정</span>
+        <span class="d">목표치와 그것이 유효한 조건, 입력 분포</span>
+      </a>
+      <a class="card" href="#/risks">
+        <span class="n">Doc 09</span><span class="t">리스크</span>
+        <span class="d">가장 큰 위험은 "위반이 재현되지 않는 것"</span>
+      </a>
+      <a class="card" href="#/outcome">
+        <span class="n">Doc 10</span><span class="t">결과물</span>
+        <span class="d">전 단계 통과 시 남는 다섯 줄 (전부 목표값)</span>
+      </a>
+    </div>
+
+    <h2>원문 저장소</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="nowrap">문서</th><th>내용</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="nowrap"><a href="https://github.com/Port-051/game-party-matcher/blob/main/README.md">README</a></td>
+            <td>문제 정의 · 분산 전제 · 9단계 접근 · 측정 방식</td>
+          </tr>
+          <tr>
+            <td class="nowrap"><a href="https://github.com/Port-051/game-party-matcher/blob/main/docs/00-prd.md">00 PRD</a></td>
+            <td>왜 · 누구 · 언제. 격발 시점 · 기존 경로 분석 · 제품 시나리오와 검증 시나리오의 분리</td>
+          </tr>
+          <tr>
+            <td class="nowrap"><a href="https://github.com/Port-051/game-party-matcher/blob/main/docs/01-functional-spec-mvp.md">01 기능 명세서</a></td>
+            <td>구현 범위와 제외 범위. 음성 호환 매트릭스 · 결정적 FCFS 절차 · 빈자리 공개 모집 원문</td>
+          </tr>
+          <tr>
+            <td class="nowrap"><a href="https://github.com/Port-051/game-party-matcher/blob/main/docs/02-technical-spec-supplement.md">02 기술 보완 명세</a></td>
+            <td>불변식 5종과 검출 SQL · 실시간 전달 · 알림 지연 큐 · 외부 API 정책 · 측정 목표의 유효 조건</td>
+          </tr>
+          <tr>
+            <td class="nowrap"><a href="https://github.com/Port-051/game-party-matcher/blob/main/docs/03-data-model.md">03 데이터 모델</a></td>
+            <td>테이블 15개 · 엔터티 출처 · 불변식이 스키마의 어느 제약으로 박히는지</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pager">
+      <span class="spacer"></span>
+      <a class="next" href="#/prd"><span class="k">다음</span><span class="t">PRD →</span></a>
+    </div>
+  </article>
+
+  <!-- ============ 00 PRD ============ -->
+  <article class="page" id="page-prd">
+    <div class="page-head">
+      <p class="eyebrow">Doc 00 · PRD</p>
+      <h1>왜 만드는가</h1>
+      <p class="standfirst">
+        트롤에 데인 직후, 발품 없이, 조건이 맞는 팀원을 서버가 묶어준다.
+      </p>
+    </div>
+
+    <div class="col">
+      <p class="deck">
+        이 문서의 모든 수치는 측정 방법을 함께 적었다. <strong>근거 없는 숫자는 쓰지 않는다.</strong>
+      </p>
+
+      <h2>사용자는 언제 이걸 여는가</h2>
+      <p>
+        평소엔 파티를 찾지 않는다. 니즈는 <strong>특정 순간에만 격발된다.</strong>
+      </p>
+      <p>
+        솔로랭크를 돌렸다. 팀원이 트롤이었다. 한 판을 통째로 날렸고, 지금 게임을 끌지 한 판 더 할지
+        고민 중이다. 이때 "정상적인 사람들과 하고 싶다"는 생각이 처음 든다.
+      </p>
+      <p>
+        그래서 게시판을 뒤진다. 그런데 올라오는 글의 상당수가 클랜·디스코드 서버 모집이다.
+        들어가려면 서버에 가입하고, 규칙을 읽고, 자기소개를 하고, 사람 많은 채널에서 눈치를 보며
+        "같이 하실 분?"을 외쳐야 한다.
+      </p>
+      <p><strong>한 판 하려고 이걸 다 하지는 않는다. 그냥 참고 혼자 돌린다.</strong></p>
+
+      <h2>기존 경로가 왜 안 되는가</h2>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="nowrap">경로</th><th>안 되는 이유</th></tr></thead>
+        <tbody>
+          <tr><td class="nowrap">게시판 (인벤 · op.gg 듀오)</td><td><strong>비동기다.</strong> 글을 쓰고 기다리는 동안 빡침이 식거나 게임을 끈다</td></tr>
+          <tr><td class="nowrap">디스코드 커뮤니티 서버</td><td><strong>가입·자기소개가 선행된다.</strong> 한 판의 대가로 지불하기엔 크다</td></tr>
+          <tr><td class="nowrap">기존 LFG 봇 (LFG Hub · Teamplay)</td><td>디스코드 봇이라 <strong>서버 안에서만</strong> 동작한다. 최소 한 곳엔 가입해야 한다</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>아무도 <strong>"발품 없이, 지금, 한 판"</strong>을 주지 않는다. 이 서비스가 서는 자리가 거기다.</p>
+
+      <h2>측정한 것</h2>
+      <p class="deck">인벤 LoL 파티 매칭 게시판 1페이지 73건 분류 (2026-08-18)</p>
+    </div>
+
+    <div class="tally">
+      <div><span class="k">클랜 · 서버 모집</span><span class="v">60.3%</span></div>
+      <div><span class="k">일회성 매칭</span><span class="v">6.8%</span></div>
+      <div><span class="k">같은 제목 도배</span><span class="v">42.5%</span></div>
+    </div>
+
+    <div class="col">
+      <p>
+        게시판 이름은 "파티 매칭"이지만 실제로는 <strong>클랜 모집 게시판</strong>이다.
+      </p>
+      <div class="note">
+        <span class="lead">이 숫자의 한계</span>
+        <p>
+          6.8%는 <em>포기하지 않고 글까지 쓴 사람</em>의 비율이다. 포기한 사람은 어디에도 흔적을
+          남기지 않으므로 <strong>이 숫자를 수요의 크기로 읽으면 안 된다.</strong>
+          읽을 수 있는 것은 "게시판이 일회성 매칭 용도로 작동하지 않는다"는 사실 하나뿐이다.
+        </p>
+      </div>
+
+      <h2>목표와 비목표</h2>
+    </div>
+
+    <div class="goals">
+      <div class="card">
+        <span class="n">목표</span>
+        <ul>
+          <li>요청을 넣은 사람이 발품 없이 조건이 맞는 팀원을 배정받는다</li>
+          <li>배정은 <strong>서버가 확정한다.</strong> 사람이 서로를 찾아다니지 않는다</li>
+          <li>한 번 괜찮았던 사람과 <strong>다시 만날 수 있다</strong></li>
+        </ul>
+      </div>
+      <div class="card">
+        <span class="n">비목표</span>
+        <ul>
+          <li>커뮤니티를 만드는 것 — 클랜·길드·친목은 이미 디스코드가 한다</li>
+          <li>실력을 올려주는 것 — 코칭·강의·대리는 다루지 않는다</li>
+          <li>게임 내 매칭을 대체하는 것 — 우리는 <strong>게임에 들어가기 전</strong> 파티를 만든다</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="col">
+      <h2>타깃 사용자</h2>
+      <p>
+        <strong>주 사용자</strong> — 솔로랭크를 주로 돌리고, 함께 할 고정 팀원이 없으며,
+        커뮤니티 가입에 거부감이 있는 한국 서버 이용자.
+      </p>
+      <p>
+        <strong>MVP 제외</strong> — 이미 5인 팀이 있는 사람, 대리·부스팅 목적, 미성년자(운영 부담).
+      </p>
+
+      <h2>왜 듀오가 1순위인가</h2>
+      <p>게임 규칙이 정한다. 리그 오브 레전드의 큐별 동반 인원 제한은 다음과 같다.</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="nowrap">큐</th><th class="nowrap">함께 큐 가능한 인원</th><th>비고</th></tr></thead>
+        <tbody>
+          <tr><td class="nowrap">솔로 · 듀오 랭크</td><td class="nowrap mono-num">1인 또는 2인</td><td>격발 시점의 사용자가 취할 수 있는 유일한 행동</td></tr>
+          <tr><td class="nowrap">자유 랭크</td><td class="nowrap mono-num">1, 2, 3, 5인</td><td>4인 불가 — 게임 규칙</td></tr>
+          <tr><td class="nowrap">일반전</td><td class="nowrap mono-num">1–5인</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>
+        배경 시나리오가 "솔로랭크를 돌렸다"이므로, 그 사용자가 취할 수 있는 행동은 <strong>듀오뿐</strong>이다.
+        정원이 작을수록 성립률도 유리하다 — 정원 2는 후보 <strong>1명</strong>만 찾으면 되고,
+        정원 5는 <strong>4명을 동시에</strong> 찾아야 하며 포지션까지 겹치지 않아야 한다.
+      </p>
+
+      <h2>제품 시나리오와 검증 시나리오는 다르다</h2>
+      <p class="deck">
+        이 프로젝트는 서비스인 동시에 <strong>동시성 설계의 검증 대상</strong>이다.
+        두 목적이 요구하는 시나리오가 다르다.
+      </p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="nowrap">구분</th><th class="nowrap">시나리오</th><th>이유</th></tr></thead>
+        <tbody>
+          <tr><td class="id">제품 P0</td><td class="nowrap">솔로 · 듀오 (정원 2)</td><td>격발 시점의 사용자가 실제로 취할 수 있는 행동</td></tr>
+          <tr><td class="id">검증 P0</td><td class="nowrap">자유 랭크 (정원 5)</td><td>포지션 배정과 <strong>좌석 경합</strong>이 여기서만 발생한다</td></tr>
+          <tr><td class="id">P1</td><td class="nowrap">일반전</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <div class="note">
+        <span class="lead">둘 다 P0로 남긴다</span>
+        <p>
+          정원 2에서는 한 명이 나가면 남은 인원이 1명이라 파티가 그냥 취소되고,
+          빈자리를 놓고 경쟁할 좌석이 생기지 않는다.
+          정원 5가 빠지면 <strong>INV-1(정원 초과)을 재현할 경로 자체가 사라진다.</strong>
+        </p>
+      </div>
+
+      <h2>핵심 사용자 흐름</h2>
+    </div>
+
+    <div class="flow">
+      <div class="flow-trigger">[격발] 솔랭 한 판 망함</div>
+      <div class="flow-gap">↓ 10초 이내</div>
+      <div class="flow-step"><span class="k">01</span><span><span class="t">진입</span><span class="d">Riot ID 입력 → 티어·포지션 자동 조회</span></span></div>
+      <div class="flow-step"><span class="k">02</span><span><span class="t">조건</span><span class="d">큐 · 티어 범위 · 포지션 — 필수 입력은 이 셋뿐</span></span></div>
+      <div class="flow-step"><span class="k">03</span><span><span class="t">대기</span><span class="d">현재 큐 인원과 남은 시간 표시</span></span></div>
+      <div class="flow-step"><span class="k">04</span><span><span class="t">제안</span><span class="d">조건이 맞는 상대와 묶임. 전원에게 동시 발송</span></span></div>
+      <div class="flow-step"><span class="k">05</span><span><span class="t">수락</span><span class="d">제한시간 내 전원 수락 시 확정</span></span></div>
+      <div class="flow-step"><span class="k">06</span><span><span class="t">합류</span><span class="d">Riot ID 공개 → 게임 클라이언트에서 초대</span></span></div>
+      <div class="flow-gap">↓ 게임 종료 후</div>
+      <div class="flow-step"><span class="k">07</span><span><span class="t">평가</span><span class="d">"또 하고 싶다 / 아니다" 1클릭 → 재회 목록 또는 차단 쌍</span></span></div>
+    </div>
+
+    <div class="col">
+      <div class="note">
+        <span class="lead">설계 제약 — 10초</span>
+        <p>
+          1번에서 3번까지 <strong>10초 안에 끝나야 한다. 빡친 사람은 폼을 채우지 않는다.</strong>
+          그래서 요청마다 새로 받는 필수 입력은 셋뿐이고, 나머지는 프로필 값을 초기값으로 채워 접어 둔다.
+          Riot ID는 등록해 두고 다시 받지 않는다. 조건 화면에는 현재 대기 인원을 띄운다 —
+          성립 가능성을 즉시 알아야 조건을 조정하기 때문이다.
+        </p>
+      </div>
+    </div>
+
+    <div class="pager">
+      <a class="prev" href="#/index"><span class="k">이전</span><span class="t">← 문서맵</span></a>
+      <a class="next" href="#/overview"><span class="k">다음</span><span class="t">개요 →</span></a>
+    </div>
+  </article>
+
+  <!-- ============ 01 OVERVIEW ============ -->
+  <article class="page" id="page-overview">
+    <div class="page-head">
+      <p class="eyebrow">Doc 01 · Overview</p>
+      <h1>개요</h1>
+      <p class="standfirst">문제·해결·MVP 범위. 이 문서가 무엇을 고정하려는지.</p>
+    </div>
+
+    <div class="col">
+      <p>
+        <strong>이 문서 묶음의 목적</strong>: 무엇을 만드는지가 아니라
+        <strong>무엇이 깨지면 실패로 보는지</strong>를 먼저 고정하는 것.
+        기능 목록은 우선순위와 함께, 동시성 문제는 검출 질의와 함께 적는다.
+        재현되지 않은 문제는 해결됐다고 말하지 않는다.
+      </p>
+
+      <h2>문제</h2>
+      <p>
+        같이 게임할 사람을 구하는 경로가 전부 사람 응답 대기로 막혀 있다.
+        디스코드 구인 글 → 누군가 읽기를 기다림 → DM → 조건 확인 → 합류.
+        각 단계가 멈춰 있어 실제로는 아는 사람에게 연락하거나 혼자 랜덤 매칭을 돌린다.
+      </p>
+      <p>
+        조건이 취향 문제가 아니라는 점이 이 문제의 성격을 정한다.
+        티어 범위·포지션·음성채팅·플레이 목적이 어긋나면 파티는 성립해도 그 판은 서로에게 손해다.
+        <strong>매칭이 느린 게 문제가 아니라, 조건을 맞추는 비용이 커서 아무도 안 하는 것이다.</strong>
+      </p>
+
+      <h2>해결</h2>
+      <p>
+        조율 단계를 없앤다. 한 사람의 요청을 조건이 맞는 후보 전원과 맞춰보고,
+        정원만큼 묶어 <strong>서버가 확정</strong>한다.
+        그래서 이건 게시판 문제가 아니라 <strong>배정(assignment) 문제</strong>다.
+      </p>
+
+      <h2>MVP 범위</h2>
+      <div class="note">
+        <span class="lead">롤 하나만</span>
+        <p>
+          매칭은 밀도가 전부라 게임을 늘리면 대기자가 갈라져 성립률이 떨어진다.
+          게임별 연동·오류 분기·조건 스키마에 드는 시간은 동시성 과제에서 그대로 빠져나간다.
+          게임 추가는 코드가 아니라 설정으로 처리할 수 있게 설계하되, MVP에는 롤 하나만 등록한다.
+        </p>
+      </div>
+      <ul>
+        <li>신원은 <strong>Discord 계정</strong>으로 확인한다. 익명 식별자를 쓰지 않으므로 기기를 바꿔도 상태가 이어진다.</li>
+        <li>티어는 <strong>Riot API 실측값</strong>이다. 자기 신고가 아니다. 다만 입력한 Riot ID가 본인 계정인지는 검증하지 못하며, 이 한계를 화면에 표시한다.</li>
+        <li>알림은 <strong>서비스 화면과 브라우저 알림</strong>으로 보낸다. 외부 메신저 설정을 요구하지 않는다. Discord 다이렉트 메시지는 원하는 사람만 켜는 선택 옵션이다.</li>
+      </ul>
+      <p>
+        <strong>제외</strong> — PUBG · Steam 게임, Riot Sign On, Discord 전용방 자동 생성,
+        일치도 점수, 조건 자동 완화, 반복 예약, 신고 · 내부 신뢰도 점수, 운영자 화면.
+      </p>
+      <p>
+        <strong>평가 · 차단 · 재회는 포함한다.</strong> 조건만으로 만난 사람과 다시 만날 수 없으면
+        이 서비스는 일회용이 된다. 재회는 조건을 완화하지 않고
+        <strong>통과한 후보 안에서 순서만 앞당긴다.</strong>
+      </p>
+    </div>
+
+    <div class="pager">
+      <a class="prev" href="#/prd"><span class="k">이전</span><span class="t">← PRD</span></a>
+      <a class="next" href="#/problem"><span class="k">다음</span><span class="t">문제 정의 →</span></a>
+    </div>
+  </article>
+
+  <!-- ============ 02 PROBLEM ============ -->
+  <article class="page" id="page-problem">
+    <div class="page-head">
+      <p class="eyebrow">Doc 02 · Problem</p>
+      <h1>문제 정의</h1>
+      <p class="standfirst">게시판을 빠르게 만드는 것으로는 풀리지 않는 일곱 가지.</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th class="nowrap">#</th><th>문제</th><th class="nowrap">성격</th><th class="nowrap">검증</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="id">1</td><td>확정 파티의 <strong>빈자리 하나에 여러 명이 동시 지원</strong></td><td class="nowrap">좌석 경합</td><td class="nowrap mono-num">M1 · M2</td></tr>
+          <tr><td class="id">2</td><td>한 사람이 시간이 겹치는 <strong>두 파티에 동시 배정</strong></td><td class="nowrap">교차 제약 경합</td><td class="nowrap mono-num">M3</td></tr>
+          <tr><td class="id">3</td><td>00시 예약 배치가 <strong>재실행·중복 실행돼도</strong> 중복 배정 없어야 함</td><td class="nowrap">멱등성</td><td class="nowrap mono-num">M4</td></tr>
+          <tr><td class="id">4</td><td>제안 1건을 <strong>서로 다른 인스턴스에 붙은</strong> 참가자 전원에게 동시 전달</td><td class="nowrap">팬아웃 · 분산 전파</td><td class="nowrap mono-num">M5</td></tr>
+          <tr><td class="id">5</td><td>알림을 걸고, 파티가 취소되면 <strong>회수</strong>하고, 두 번 보내지 않기</td><td class="nowrap">지연 큐 멱등성</td><td class="nowrap mono-num">M5</td></tr>
+          <tr><td class="id">6</td><td>Riot API의 갱신 주기 · 동시 조회 · 레이트리밋</td><td class="nowrap">캐싱 · 호출 병합</td><td class="nowrap mono-num">M6</td></tr>
+          <tr><td class="id">7</td><td>5인 파티를 <strong>주/부 포지션 제약 하에</strong> 서로 다른 포지션으로 배정</td><td class="nowrap">조합 탐색</td><td class="nowrap mono-num">M6</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <h2>1·2번이 핵심이다</h2>
+      <p>
+        <strong>2번은 이 서비스에 원래 있는 문제다.</strong> 요청 하나가 동시에 두 후보 파티에 묶이면
+        사용자는 같은 시간에 두 파티에 들어간다. 단일 행 카운터가 아니라 요청·시간·포지션이 얽힌
+        교차 제약이라, 재고 차감보다 제약을 표현하는 것 자체가 어렵다.
+      </p>
+      <p>
+        <strong>1번은 빈자리 충원 때문에 생긴다.</strong> 서버가 정원만큼 묶어 제안하고 전원 수락해야
+        확정하는 구조에서는 자리를 놓고 경쟁하는 사람이 없다. 정원 초과는 확정된 파티에서 이탈자가 나와
+        그 자리를 공개 모집할 때 비로소 발생한다. 5인 파티에서 한 명 빠졌다고 파티 전체를 버리는 건
+        낭비이므로 충원은 실제로 필요한 기능이고, 그 기능이 좌석 경합을 만든다.
+        빈자리는 포지션 단위로 열리므로 경합 대상은 파티 정원이 아니라
+        <strong>특정 포지션의 좌석 하나</strong>다.
+      </p>
+      <p>
+        <strong>3번은 성격이 다르다.</strong> 예약 매칭은 수락 없이 자동 확정되므로, 배치가 두 번 돌면
+        사용자는 자기가 모르는 파티에 두 번 들어간다. 사후 취소로 수습할 수 없다.
+      </p>
+    </div>
+
+    <div class="pager">
+      <a class="prev" href="#/overview"><span class="k">이전</span><span class="t">← 개요</span></a>
+      <a class="next" href="#/system"><span class="k">다음</span><span class="t">아키텍처 →</span></a>
+    </div>
+  </article>
+
+  <!-- ============ 03 SYSTEM ============ -->
+  <article class="page" id="page-system">
+    <div class="page-head">
+      <p class="eyebrow">Doc 03 · Architecture</p>
+      <h1>아키텍처</h1>
+      <p class="standfirst">
+        그림은 한 장이다. 역할 계층과 배포 경계를 따로 그리면 둘이 어긋나고,
+        어긋났을 때 어느 쪽이 맞는지 판정할 근거가 없다. 인스턴스 2대를 전제한다.
+      </p>
+    </div>
+
+    <div class="dg">
+      <svg viewBox="0 0 1300 770" role="img"
+           aria-label="웹과 로드밸런서에서 시작해 API 계층 · 매칭 엔진 · 예약 스케줄러 · 알림 워커 · 실시간 연결 다섯 실행기를 지나 PostgreSQL과 Redis로 흐르는 파티 매칭 아키텍처. 다섯 실행기는 인스턴스 2대에서 각각 돌고, 경합 지점은 세 곳이다.">
+        <defs>
+          <marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L8,4 L0,8 Z" class="d-arrow"/>
+          </marker>
+          <marker id="ahe" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0,0 L8,4 L0,8 Z" class="d-arrow-evt"/>
+          </marker>
+        </defs>
+
+        <rect x="400" y="34" width="292" height="692" rx="20" class="d-band-soft"/>
+        <text x="418" y="56" class="d-band-lbl">애플리케이션 인스턴스 × 2 — 같은 이미지</text>
+
+        <!-- edges -->
+        <path d="M260 100 Q268 108 276 124" class="d-wire" marker-end="url(#ah)"/>
+        <path d="M260 206 Q286 204 292 168" class="d-wire" marker-end="url(#ah)"/>
+        <text x="273" y="215.5" text-anchor="middle" class="d-elbl">합성 부하</text>
+        <path d="M372 112 Q398 104 416 108" class="d-wire" marker-end="url(#ah)"/>
+        <text x="390" y="93" text-anchor="middle" class="d-elbl">/api/**</text>
+        <path d="M320 162 Q330 470 424 660" class="d-wire" marker-end="url(#ah)"/>
+        <text x="311" y="370.5" text-anchor="middle" class="d-elbl">/events/**</text>
+        <path d="M424 652 Q250 420 158 140" class="d-wire-evt" marker-end="url(#ahe)"/>
+        <text x="254.5" y="448" text-anchor="middle" class="d-elbl">실시간 이벤트</text>
+        <path d="M675 110 Q762 120 818 150" class="d-wire" marker-end="url(#ah)"/>
+        <text x="768.25" y="101" text-anchor="middle" class="d-elbl">파티 쓰기</text>
+        <path d="M675 80 Q880 40 1086 60" class="d-wire" marker-end="url(#ah)"/>
+        <text x="880.25" y="43" text-anchor="middle" class="d-elbl">티어 조회 · 캐시 미스</text>
+        <path d="M675 124 Q880 126 1086 152" class="d-wire" marker-end="url(#ah)"/>
+        <text x="880.25" y="120" text-anchor="middle" class="d-elbl">신원 확인</text>
+        <path d="M622 136 Q744 300 806 456" class="d-wire" marker-end="url(#ah)"/>
+        <text x="755" y="316" text-anchor="middle" class="d-elbl">좌석 락 · 알림 예약</text>
+        <path d="M667 230 Q736 222 796 220" class="d-wire" marker-end="url(#ah)"/>
+        <text x="733.75" y="209.5" text-anchor="middle" class="d-elbl">제안 저장</text>
+        <path d="M667 266 Q726 376 804 444" class="d-wire" marker-end="url(#ah)"/>
+        <text x="736.75" y="381.5" text-anchor="middle" class="d-elbl">제안 발행</text>
+        <path d="M674 370 Q776 330 852 254" class="d-wire" marker-end="url(#ah)"/>
+        <text x="777.5" y="347" text-anchor="middle" class="d-elbl">자동 확정</text>
+        <path d="M674 402 Q736 442 796 466" class="d-wire" marker-end="url(#ah)"/>
+        <text x="729.5" y="424" text-anchor="middle" class="d-elbl">배치 락</text>
+        <path d="M667 512 Q734 496 796 498" class="d-wire" marker-end="url(#ah)"/>
+        <text x="732.75" y="486.5" text-anchor="middle" class="d-elbl">큐 폴링 · 회수</text>
+        <path d="M667 544 Q880 608 1086 504" class="d-wire" marker-end="url(#ah)"/>
+        <text x="878.25" y="592" text-anchor="middle" class="d-elbl">알림 발송</text>
+        <path d="M808 528 Q734 602 680 650" class="d-wire-evt" marker-end="url(#ahe)"/>
+        <text x="705" y="617.5" text-anchor="middle" class="d-elbl">제안 · 상태 구독</text>
+        <path d="M1086 318 Q1052 300 1034 252" class="d-wire-evt" marker-end="url(#ahe)"/>
+        <text x="1026" y="314.5" text-anchor="middle" class="d-elbl">INV 질의</text>
+        <path d="M1086 648 Q880 724 680 676" class="d-wire-evt" marker-end="url(#ahe)"/>
+        <text x="881.5" y="719" text-anchor="middle" class="d-elbl">p95 · 처리량 관측</text>
+
+        <!-- nodes -->
+        <rect x="50" y="74" width="210" height="62" rx="13" class="d-box"/>
+        <text x="155" y="102" text-anchor="middle" class="d-name">웹 · 앱</text>
+        <text x="155" y="119" text-anchor="middle" class="d-sub">신청 · 제안 확인 · 수락/거절</text>
+        <rect x="50" y="186" width="210" height="56" rx="13" class="d-box-obs"/>
+        <text x="155" y="211" text-anchor="middle" class="d-name">부하 발생기</text>
+        <text x="155" y="228" text-anchor="middle" class="d-sub">씨드 고정 · 합성 부하</text>
+        <rect x="280" y="104" width="110" height="58" rx="13" class="d-box"/>
+        <text x="335" y="130" text-anchor="middle" class="d-name">로드밸런서</text>
+        <text x="335" y="147" text-anchor="middle" class="d-sub">연결 고정</text>
+        <rect x="420" y="70" width="255" height="66" rx="13" class="d-box"/>
+        <text x="547.5" y="100" text-anchor="middle" class="d-name">API 계층</text>
+        <text x="547.5" y="117" text-anchor="middle" class="d-sub">요청 · 수락/거절 집계 · 파티 확정</text>
+        <rect x="645" y="78" width="24" height="14" rx="4" class="d-x2bg"/>
+        <text x="657" y="88" text-anchor="middle" class="d-x2">×2</text>
+        <rect x="412" y="206" width="255" height="70" rx="13" class="d-box"/>
+        <text x="539.5" y="231" text-anchor="middle" class="d-name">매칭 엔진</text>
+        <text x="539.5" y="248" text-anchor="middle" class="d-sub">후보 필터 → FCFS → 포지션 배정</text>
+        <text x="539.5" y="262" text-anchor="middle" class="d-sub">1초 틱</text>
+        <rect x="637" y="214" width="24" height="14" rx="4" class="d-x2bg"/>
+        <text x="649" y="224" text-anchor="middle" class="d-x2">×2</text>
+        <rect x="424" y="356" width="250" height="62" rx="13" class="d-box"/>
+        <text x="549" y="384" text-anchor="middle" class="d-name">예약 스케줄러</text>
+        <text x="549" y="401" text-anchor="middle" class="d-sub">매일 00시 · 만료 스윕</text>
+        <rect x="644" y="364" width="24" height="14" rx="4" class="d-x2bg"/>
+        <text x="656" y="374" text-anchor="middle" class="d-x2">×2</text>
+        <rect x="412" y="496" width="255" height="62" rx="13" class="d-box"/>
+        <text x="539.5" y="524" text-anchor="middle" class="d-name">알림 워커</text>
+        <text x="539.5" y="541" text-anchor="middle" class="d-sub">지연 큐 폴링 · 회수 · 멱등 발송</text>
+        <rect x="637" y="504" width="24" height="14" rx="4" class="d-x2bg"/>
+        <text x="649" y="514" text-anchor="middle" class="d-x2">×2</text>
+        <rect x="424" y="636" width="250" height="62" rx="13" class="d-box"/>
+        <text x="549" y="664" text-anchor="middle" class="d-name">실시간 연결</text>
+        <text x="549" y="681" text-anchor="middle" class="d-sub">자기 연결에만 전달</text>
+        <rect x="644" y="644" width="24" height="14" rx="4" class="d-x2bg"/>
+        <text x="656" y="654" text-anchor="middle" class="d-x2">×2</text>
+        <path class="d-cyl" d="M800 159 V237 A115 13 0 0 0 1030 237 V159 A115 13 0 0 0 800 159 Z"/>
+        <text x="915" y="189" text-anchor="middle" class="d-name">PostgreSQL</text>
+        <text x="915" y="206" text-anchor="middle" class="d-sub">권위 있는 상태 · DB 시계</text>
+        <text x="915" y="220" text-anchor="middle" class="d-sub">INV-1~5 검출 대상</text>
+        <path class="d-cyl" d="M800 439 V517 A115 13 0 0 0 1030 517 V439 A115 13 0 0 0 800 439 Z"/>
+        <text x="915" y="469" text-anchor="middle" class="d-name">Redis</text>
+        <text x="915" y="486" text-anchor="middle" class="d-sub">분산 락 · 제안 Pub/Sub</text>
+        <text x="915" y="500" text-anchor="middle" class="d-sub">지연 큐 · 조회 캐시</text>
+        <rect x="1090" y="46" width="190" height="52" rx="13" class="d-box"/>
+        <text x="1185" y="69" text-anchor="middle" class="d-name">Riot API</text>
+        <text x="1185" y="86" text-anchor="middle" class="d-sub">account-v1 · league-v4</text>
+        <rect x="1090" y="128" width="190" height="52" rx="13" class="d-box"/>
+        <text x="1185" y="151" text-anchor="middle" class="d-name">Discord OAuth2</text>
+        <text x="1185" y="168" text-anchor="middle" class="d-sub">신원 확인</text>
+        <rect x="1090" y="300" width="190" height="56" rx="13" class="d-box-obs"/>
+        <text x="1185" y="325" text-anchor="middle" class="d-name">위반 검출기</text>
+        <text x="1185" y="342" text-anchor="middle" class="d-sub">INV 질의 직접 실행</text>
+        <rect x="1090" y="470" width="190" height="52" rx="13" class="d-box"/>
+        <text x="1185" y="493" text-anchor="middle" class="d-name">Web Push</text>
+        <text x="1185" y="510" text-anchor="middle" class="d-sub">VAPID 브라우저 알림</text>
+        <rect x="1090" y="620" width="190" height="56" rx="13" class="d-box-obs"/>
+        <text x="1185" y="645" text-anchor="middle" class="d-name">지표 수집기</text>
+        <text x="1185" y="662" text-anchor="middle" class="d-sub">p95 · 처리량</text>
+
+        <!-- contention -->
+        <circle cx="782" cy="178" r="10" class="d-badge"/>
+        <text x="782" y="182" text-anchor="middle" class="d-badge-t">1</text>
+        <circle cx="782" cy="236" r="10" class="d-badge"/>
+        <text x="782" y="240" text-anchor="middle" class="d-badge-t">2</text>
+        <circle cx="782" cy="452" r="10" class="d-badge"/>
+        <text x="782" y="456" text-anchor="middle" class="d-badge-t">3</text>
+      </svg>
+    </div>
+
+    <div class="dg-strokes">
+      <span><i></i>실선 — 요청 · 쓰기</span>
+      <span><i class="evt"></i>점선 — 이벤트 · 전파 · 관측</span>
+    </div>
+
+    <div class="dg-key">
+      <div class="dg-key-row">
+        <span class="b">1</span>
+        <p><span class="h">좌석 경합 (INV-1)</span> — 두 인스턴스가 같은 포지션 좌석을 동시에 확정하면 정원을 넘긴다.
+        빈자리 공개 모집(F4·F5)이 이 경합을 만드는 유일한 경로다.</p>
+      </div>
+      <div class="dg-key-row">
+        <span class="b">2</span>
+        <p><span class="h">중복 배정 (INV-2)</span> — 서로 다른 인스턴스가 같은 사용자를 시간이 겹치는 두 파티에 넣는다.
+        단일 행 카운터가 아니라 사용자·시간 구간의 교차 제약이라 표현부터 어렵다.</p>
+      </div>
+      <div class="dg-key-row">
+        <span class="b">3</span>
+        <p><span class="h">배치 중복 실행 (INV-3)</span> — 두 스케줄러가 00시 배치에 동시 진입하거나,
+        락 TTL이 만료된 뒤에도 첫 실행이 쓰기를 계속한다. 멱등성은 락이 아니라 조건부 쓰기로 보장한다.</p>
+      </div>
+    </div>
+
+    <p class="dg-cap">
+      흐름은 왼쪽에서 오른쪽으로 읽는다 — 웹과 로드밸런서에서 들어와 다섯 실행기를 지나 저장소에서 끝난다.
+      <strong>회색 면 안의 다섯 상자</strong>는 한 인스턴스의 실행기이고, <code>×2</code>는 그 실행기가
+      인스턴스 2대에서 각각 돈다는 뜻이다. 역할이 나뉘어 있지 않기 때문에 세 경합이 모두 성립한다.
+      점선 테두리 상자는 <strong>측정 도구</strong>로, 운영 구성이 아니다.
+      간선은 흐름과 경합을 정하는 것만 남겼다.
+    </p>
+
+    <div class="col">
+      <div class="note">
+        <span class="lead">왜 2대인가</span>
+        <p>
+          인스턴스가 하나면 애플리케이션 내부 락만으로 좌석 경합과 중복 배정이 막힌다.
+          막히면 문제가 재현되지 않고, 재현되지 않으면 데이터베이스 제약과 분산 락의 필요성을
+          증명할 수 없다. 문제 3·4·5번은 아예 인스턴스가 둘 이상일 때만 나타난다.
+        </p>
+      </div>
+    </div>
+
+    <h2>상태의 소재</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="nowrap">상태</th><th class="nowrap">위치</th><th>이유</th></tr></thead>
+        <tbody>
+          <tr><td class="nowrap">파티 · 참가자 · 요청 · 배정 포지션</td><td class="nowrap">RDB</td><td>불변식 검증의 유일한 권위. 위반 계수는 여기서만 센다</td></tr>
+          <tr><td class="nowrap">분산 락</td><td class="nowrap">Redis</td><td>배치 단일 실행, 좌석 경합 제어 비교군</td></tr>
+          <tr><td class="nowrap">제안 전파</td><td class="nowrap">Redis Pub/Sub</td><td>인스턴스 간 팬아웃</td></tr>
+          <tr><td class="nowrap">알림 예약</td><td class="nowrap">Redis Sorted Set</td><td>지연 큐. 회수 가능해야 함</td></tr>
+          <tr><td class="nowrap">Riot 조회 결과</td><td class="nowrap">Redis</td><td>신선도 기준 안에서 재사용</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>
+        <strong>캐시는 권위가 아니다.</strong> Redis가 통째로 날아가도 불변식은 깨지지 않아야 하며,
+        캐시 소실 후 재기동을 측정 시나리오에 포함한다.
+      </p>
+
+      <h2>시계</h2>
+      <p>
+        만료·마감·배치 기준 시각은 애플리케이션 시계가 아니라 <strong>데이터베이스 시계</strong>를 쓴다.
+        인스턴스 간 시계 차이가 제안 만료와 좌석 마감의 판정을 갈라놓으면 안 된다.
+        지연 측정만은 단일 시계 기준으로 별도 수집한다.
+      </p>
+    </div>
+
+    <div class="pager">
+      <a class="prev" href="#/problem"><span class="k">이전</span><span class="t">← 문제 정의</span></a>
+      <a class="next" href="#/features"><span class="k">다음</span><span class="t">기능 명세 →</span></a>
+    </div>
+  </article>
+
+  <!-- ============ 04 FEATURES ============ -->
+  <article class="page" id="page-features">
+    <div class="page-head">
+      <p class="eyebrow">Doc 04 · Features</p>
+      <h1>기능 명세</h1>
+      <p class="standfirst">
+        <span class="chip p0">P0</span> 없으면 핵심 서사가 무너진다 ·
+        <span class="chip p1">P1</span> 완성도 · 후속 단계 ·
+        <span class="chip star">경합</span> 동시성 위반이 실제로 발생하는 지점
+      </p>
+    </div>
+
+    <div class="tally">
+      <div><span class="k">P0</span><span class="v">44</span></div>
+      <div><span class="k">P1</span><span class="v">11</span></div>
+      <div><span class="k">합계</span><span class="v">55</span></div>
+      <div><span class="k">경합 지점</span><span class="v">5</span></div>
+    </div>
+
+    <h2>A. 신원 · 프로필</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="nowrap">ID</th><th class="nowrap">기능</th><th>설명</th><th class="nowrap t-center">우선</th></tr></thead>
+        <tbody>
+          <tr><td class="id">A1</td><td class="nowrap">Discord OAuth2</td><td>OAuth 단일 진입. 계정에 상태를 귀속시켜 기기를 바꿔도 이어진다</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">A2</td><td class="nowrap">프로필</td><td>닉네임 · 음성채팅 조건 3값 · 플레이 목적 · 분위기</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">A3</td><td class="nowrap">알림 채널 설정</td><td>브라우저 알림 권한은 첫 요청 시점에 요구한다. <strong>거부해도 서비스를 쓸 수 있다</strong> — 어떤 채널도 신청의 전제 조건이 아니다</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>B. 롤 계정 연동 (Riot API)</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="nowrap">ID</th><th class="nowrap">기능</th><th>설명</th><th class="nowrap t-center">우선</th></tr></thead>
+        <tbody>
+          <tr><td class="id">B1</td><td class="nowrap">Riot ID → PUUID</td><td><code>account-v1</code>, 지역 라우팅 <code>asia</code></td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">B2</td><td class="nowrap">티어 · LP 조회</td><td><code>summoner-v4</code> → <code>league-v4</code>, 플랫폼 <code>kr</code>. 솔로·자유 구분</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">B3</td><td class="nowrap">신선도 캐시</td><td>허용 지연 10분. TTL이 아니라 <strong>고정 제약</strong> — 호출 감소율 목표가 여기 묶인다. <strong>요청 생성 시점에만</strong> 강제한다</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">B4</td><td class="nowrap">동시 조회 병합</td><td>같은 계정 동시 요청을 하나로 (single-flight). 인스턴스 내부 / 인스턴스 간을 구분해 측정</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">B5</td><td class="nowrap">레이트리밋 제어</td><td>1초 20회 · 2분 100회. 인스턴스 2대가 키를 공유하므로 카운터도 공유 저장소에</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">B6</td><td class="nowrap">스탬피드 대응</td><td>동시 만료 · 캐시 전체 소실 두 시나리오. 먼저 재현해 호출 폭증을 수치로 남긴다</td><td class="t-center"><span class="chip p1">P1</span></td></tr>
+          <tr><td class="id">B7</td><td class="nowrap">포지션 설정</td><td>주 1개 + 부 N개. <code>상관없음</code>은 다섯 포지션 전부를 부로 취급</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">B8</td><td class="nowrap">티어 스냅샷</td><td>요청 생성 시점의 티어를 요청에 고정한다. 매칭은 캐시가 아니라 이 값만 읽는다 — 입력이 불변이라야 D3와 INV-3이 성립한다 <span class="chip star">전제</span></td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">B9</td><td class="nowrap">시작 전 재검증</td><td>예약 파티는 준비 확인 시점에 티어를 다시 조회한다. 확정과 플레이 사이가 최대 21시간 벌어진다. 안내용이며 매칭 판정에 쓰지 않는다</td><td class="t-center"><span class="chip p1">P1</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>C. 매칭 요청</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="nowrap">ID</th><th class="nowrap">기능</th><th>설명</th><th class="nowrap t-center">우선</th></tr></thead>
+        <tbody>
+          <tr><td class="id">C1</td><td class="nowrap">즉시 매칭 요청</td><td>최대 대기시간 + <strong>예상 플레이시간</strong>. 후자가 없으면 파티에 종료 시각이 없어 INV-2를 판정할 수 없다</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">C2</td><td class="nowrap">예약 요청</td><td>익일 이후, 시작 가능 범위 3단계, 전날 23:59 마감</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">C3</td><td class="nowrap">수정 · 취소</td><td><code>대기 중</code> 상태에서만 허용</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">C4</td><td class="nowrap">취소 ↔ 제안 경합</td><td><strong>요청 상태 전이에 먼저 성공한 쪽이 이긴다.</strong> 제안이 이기면 취소는 실패하고 거절 경로를 준다 <span class="chip star">경합</span></td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">C5</td><td class="nowrap">중복 요청 차단</td><td>시간이 겹치는 요청을 애초에 만들지 못하게 한다</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>D. 매칭 엔진</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="nowrap">ID</th><th class="nowrap">기능</th><th>설명</th><th class="nowrap t-center">우선</th></tr></thead>
+        <tbody>
+          <tr><td class="id">D1</td><td class="nowrap">후보 제외 필터</td><td>큐 · 인원 · 시간 · 티어 범위 · 음성 · 목적 · 포지션 · 기존 확정 파티 · <strong>차단 쌍</strong> 9종</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">D2</td><td class="nowrap">음성 호환 매트릭스</td><td>3×3. <code>필수</code>+<code>가능</code>은 통과, <code>필수</code>+<code>사용안함</code>만 배제. 값이 다르면 제외하는 규칙은 틀렸다</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">D3</td><td class="nowrap">결정적 FCFS</td><td><code>(신청 시각, 요청 ID)</code> 전순서로 seed를 잡고 정원까지 채운다. 같은 입력 → 같은 결과가 배치 멱등성의 전제</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">D4</td><td class="nowrap">포지션 배정</td><td>주/부 선호를 간선으로 둔 이분 매칭. 배정 불가 조합은 파티를 성립시키지 않는다</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">D5</td><td class="nowrap">탐색 가지치기</td><td>5인 완전 배정 탐색 공간 축소. 배치 처리량 목표가 여기에 달려 있다</td><td class="t-center"><span class="chip p1">P1</span></td></tr>
+          <tr><td class="id">D6</td><td class="nowrap">파티션 단일 라이터</td><td>큐 단위 파티션 + 순차 처리. 락 전략의 비교군이지 대안이 아니다</td><td class="t-center"><span class="chip p1">P1</span></td></tr>
+          <tr><td class="id">D7</td><td class="nowrap">즉시 매칭 실행기</td><td>각 인스턴스가 짧은 주기로 대기 요청을 훑는다. 두 실행기가 같은 후보로 서로 다른 파티를 만들 수 있고, 그 경합은 INV-3이 흡수한다 <span class="chip star">경합</span></td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>E. 제안 · 수락</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="nowrap">ID</th><th class="nowrap">기능</th><th>설명</th><th class="nowrap t-center">우선</th></tr></thead>
+        <tbody>
+          <tr><td class="id">E1</td><td class="nowrap">제안 생성 · 팬아웃</td><td>참가자 전원에게 동시 발행. 수락 제한시간은 <strong>제안 생성 시각</strong> 기준 — 먼저 받은 사람이 유리하면 안 된다</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">E2</td><td class="nowrap">인스턴스 간 전파</td><td>커밋 <em>후</em> Pub/Sub 발행. 각 인스턴스는 자기에게 붙은 연결에만 전달</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">E3</td><td class="nowrap">수락 · 거절 멱등</td><td>중복 클릭 · 네트워크 재전송에도 한 번만 처리 <span class="chip star">경합</span></td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">E4</td><td class="nowrap">만료 이중 경로</td><td>예약 만료 작업 + 응답 시점 지연 판정. 둘이 동시에 돌아도 상태 전이는 한 번</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">E5</td><td class="nowrap">재연결 복구</td><td>끊긴 동안의 이벤트를 재전송하지 않고 <strong>현재 상태 전체를 재조회</strong></td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">E6</td><td class="nowrap">실패 조합 억제</td><td>참가 요청 ID 집합 해시 기준 10분. 구성원이 하나라도 다르면 새 조합</td><td class="t-center"><span class="chip p1">P1</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>F. 확정 파티 · 빈자리 모집</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="nowrap">ID</th><th class="nowrap">기능</th><th>설명</th><th class="nowrap t-center">우선</th></tr></thead>
+        <tbody>
+          <tr><td class="id">F1</td><td class="nowrap">파티 확정</td><td>전원 수락 시에만. 시작 · 종료 예정 시각을 확정한다</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">F2</td><td class="nowrap">준비 확인</td><td>참여 가능 / 늦을 예정 / 참여 불가</td><td class="t-center"><span class="chip p1">P1</span></td></tr>
+          <tr><td class="id">F3</td><td class="nowrap">확정 후 이탈</td><td>2명 미만이 되면 파티 전체 취소, 2명 이상이면 모집 전환</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">F4</td><td class="nowrap">좌석 공개</td><td>빈자리를 <strong>비어 있는 포지션 단위</strong>로 공개. 조건이 맞는 대기자에게 노출</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">F5</td><td class="nowrap">좌석 선착순 확정</td><td>수락 절차 없이 즉시 확정. <strong>여러 명이 같은 좌석에 동시 지원해도 정원을 넘기지 않는다</strong> <span class="chip star">경합</span></td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">F6</td><td class="nowrap">모집 마감</td><td><strong>예약 파티는 시작 10분 전, 즉시 매칭 파티는 모집 시작부터 15분.</strong> 같은 규칙을 쓰면 즉시 매칭은 모집 창이 열리자마자 닫혀 INV-1이 재현되지 않는다</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">F7</td><td class="nowrap">완료 전환</td><td><strong>플레이 종료 이벤트로 전환한다.</strong> 게임은 시계로 끝나지 않으므로 예정 시각은 백스톱으로만 쓴다</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">F8</td><td class="nowrap">평가와 재회</td><td>1클릭 <code>또 하고 싶다</code> / <code>아니다</code>. 전자는 재회 목록, 후자는 차단 쌍. <strong>재회는 조건을 완화하지 않고 통과한 후보 안에서 순서만 앞당긴다</strong> — 조건만으로 만난 사람과 다시 못 만나면 이 서비스는 일회용이 된다</td><td class="t-center"><span class="chip p1">P1</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>G. 알림</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="nowrap">ID</th><th class="nowrap">기능</th><th>설명</th><th class="nowrap t-center">우선</th></tr></thead>
+        <tbody>
+          <tr><td class="id">G1</td><td class="nowrap">웹 알림 발송</td><td>Web Push. 제안 도착 · 제한시간 임박 · 확정 · 충원 · 인원 감소 · 취소 · 준비 확인 · 평가 요청. 화면을 닫은 사용자에게 닿는 유일한 경로다</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">G2</td><td class="nowrap">지연 큐</td><td>Redis Sorted Set, score = 발송 예정 시각. 인스턴스 2대가 같은 항목을 꺼내는 경우가 재현 대상 <span class="chip star">경합</span></td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">G3</td><td class="nowrap">취소 시 회수</td><td>큐에서 제거 + 발송 직전 파티 상태 재확인. 이미 꺼내 든 항목까지 막아야 한다</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">G4</td><td class="nowrap">중복 발송 차단</td><td><code>dedup_key = (party, user, kind, 예정 시각)</code> 유니크. 전송은 at-least-once, 차단은 기록 쪽에서</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">G5</td><td class="nowrap">리마인더</td><td>시작 24시간 · 1시간 · 10분 전</td><td class="t-center"><span class="chip p1">P1</span></td></tr>
+          <tr><td class="id">G6</td><td class="nowrap">Discord 알림 (선택)</td><td>기본 꺼짐. 켜지 않아도 모든 기능을 쓸 수 있다. 외부 메신저 설정을 요구하면 "발품 없이 지금 한 판"이라는 전제가 깨진다</td><td class="t-center"><span class="chip p1">P1</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>H. 배치 · 자동 처리</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="nowrap">ID</th><th class="nowrap">기능</th><th>설명</th><th class="nowrap t-center">우선</th></tr></thead>
+        <tbody>
+          <tr><td class="id">H1</td><td class="nowrap">00시 예약 배치</td><td>당일 대기 예약을 D3 절차로 구성하고 수락 없이 자동 확정</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">H2</td><td class="nowrap">분산 락 단일 실행</td><td>인스턴스 2대 중 하나만 진입</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">H3</td><td class="nowrap">락 만료 중 작업 지속</td><td>TTL이 배치 소요보다 짧으면 락이 풀린 뒤에도 쓰기가 계속된다. <strong>멱등성은 락이 아니라 조건부 쓰기로 보장한다</strong></td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">H4</td><td class="nowrap">재실행 멱등</td><td>순차 2회 · 동시 2인스턴스 · 중단 후 재실행 세 시나리오</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">H5</td><td class="nowrap">만료 스윕</td><td>최대 대기시간 초과 요청 종료, 제한시간 초과 제안 자동 거절</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>I. 운영 · 측정</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="nowrap">ID</th><th class="nowrap">기능</th><th>설명</th><th class="nowrap t-center">우선</th></tr></thead>
+        <tbody>
+          <tr><td class="id">I1</td><td class="nowrap">로컬 전 스택</td><td>docker-compose로 App×2 + RDB + Redis</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">I2</td><td class="nowrap">위반 검출기</td><td>INV-1~5 검사 질의를 부하 종료 후 자동 실행하고 건수를 계수</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">I3</td><td class="nowrap">합성 부하 발생기</td><td>씨드 고정. 동시 대기자 10 / 30 / 50 / 100 / 200 구간</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+          <tr><td class="id">I4</td><td class="nowrap">입력 분포 2종</td><td>균등 분포와 실제 티어 분포 근사. 씨드는 재현성만 주지 타당성을 주지 않는다</td><td class="t-center"><span class="chip p1">P1</span></td></tr>
+          <tr><td class="id">I5</td><td class="nowrap">요청 추적</td><td>MDC 기반. 요청 1건이 어느 조건에서 걸러졌는지 로그로 복원</td><td class="t-center"><span class="chip p1">P1</span></td></tr>
+          <tr><td class="id">I6</td><td class="nowrap">지표 수집</td><td>p95 · 처리량 · 외부 API 호출 수. 인스턴스 2대 구성에서만 수집</td><td class="t-center"><span class="chip p0">P0</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pager">
+      <a class="prev" href="#/system"><span class="k">이전</span><span class="t">← 시스템 구성</span></a>
+      <a class="next" href="#/invariants"><span class="k">다음</span><span class="t">불변식 →</span></a>
+    </div>
+  </article>
+
+  <!-- ============ 05 INVARIANTS ============ -->
+  <article class="page" id="page-invariants">
+    <div class="page-head">
+      <p class="eyebrow">Doc 05 · Invariants</p>
+      <h1>불변식</h1>
+      <p class="standfirst">
+        통과 게이트다. 비교 지표가 아니다. 각 검사 질의가 <strong>0행</strong>을 반환해야 통과하고,
+        1행이라도 나오면 탈락이다.
+      </p>
+    </div>
+
+    <div class="col">
+      <p class="deck">
+        검출은 로그가 아니라 데이터베이스를 직접 검사한다 —
+        위반이 발생했는데 로그에 안 남는 경우가 가장 위험하기 때문이다.
+      </p>
+    </div>
+
+    <div class="gates">
+
+      <article class="gate">
+        <div class="gate-head">
+          <span class="gate-id">INV-1</span>
+          <span class="gate-title">정원 초과</span>
+          <span class="gate-prob">문제 1 · M1</span>
+        </div>
+        <p class="gate-body">
+          확정된 파티의 인원은 목표 인원을 넘지 않는다. 이 위반은 <strong>F4·F5 빈자리 모집 경로에서만</strong>
+          발생하고, 그 경로가 실제로 열리는 것은 <strong>예약 파티뿐</strong>이다 —
+          즉시 매칭 파티는 확정 시각이 곧 시작 시각이라 모집 창이 따로 정의돼야 한다.
+          다섯 불변식 중 <strong>유일하게 단순 제약으로 막을 수 없다.</strong>
+          정원은 행 하나의 속성이 아니라 집합의 크기이기 때문이며, 그래서 M1·M2가 이 프로젝트의 본체다.
+        </p>
+        <details>
+          <summary>검사 질의</summary>
+          <pre><span class="kw">SELECT</span> p.id, p.target_size, <span class="kw">COUNT</span>(pm.request_id) <span class="kw">AS</span> actual
+<span class="kw">FROM</span> party p
+<span class="kw">JOIN</span> party_member pm <span class="kw">ON</span> pm.party_id = p.id
+<span class="kw">WHERE</span> p.status <span class="kw">IN</span> ('CONFIRMED', 'RECRUITING')
+  <span class="kw">AND</span> pm.left_at <span class="kw">IS NULL</span>
+<span class="kw">GROUP BY</span> p.id, p.target_size
+<span class="kw">HAVING</span> <span class="kw">COUNT</span>(pm.request_id) &gt; p.target_size;</pre>
+        </details>
+      </article>
+
+      <article class="gate">
+        <div class="gate-head">
+          <span class="gate-id">INV-2</span>
+          <span class="gate-title">시간이 겹치는 중복 배정</span>
+          <span class="gate-prob">문제 2 · M3</span>
+        </div>
+        <p class="gate-body">
+          한 사람이 시간이 겹치는 두 파티에 동시에 속하지 않는다. 이 질의가 성립하려면 모든 파티에
+          <code>end_at</code>이 있어야 한다 — 즉시 매칭에 예상 플레이시간을 받는 이유(C1)가 이것이다.
+          제약을 애플리케이션에 둘지 DB에 둘지는 M3에서 결정한다. DB에 둘 경우
+          <strong>배제 제약은 한 테이블 안에서만 성립하므로</strong> 사용자와 시간 구간을 한 행에 모은
+          <code>user_busy_interval</code>이 따로 필요하다. <code>user_id</code>는 <code>party_member</code>에,
+          시각은 <code>party</code>에 있어 두 테이블에 걸친 제약은 만들 수 없다.
+        </p>
+        <details>
+          <summary>검사 질의</summary>
+          <pre><span class="kw">SELECT</span> a.user_id, a.party_id, b.party_id
+<span class="kw">FROM</span> party_member a
+<span class="kw">JOIN</span> party_member b
+  <span class="kw">ON</span> a.user_id = b.user_id
+ <span class="kw">AND</span> a.party_id &lt; b.party_id
+<span class="kw">JOIN</span> party pa <span class="kw">ON</span> pa.id = a.party_id
+<span class="kw">JOIN</span> party pb <span class="kw">ON</span> pb.id = b.party_id
+<span class="kw">WHERE</span> pa.status <span class="kw">IN</span> ('CONFIRMED', 'RECRUITING')
+  <span class="kw">AND</span> pb.status <span class="kw">IN</span> ('CONFIRMED', 'RECRUITING')
+  <span class="kw">AND</span> tstzrange(pa.start_at, pa.end_at)
+   &amp;&amp; tstzrange(pb.start_at, pb.end_at);
+
+<span class="kw">-- DB로 강제할 경우 — 전용 테이블이 필요하다</span>
+<span class="kw">CREATE TABLE</span> user_busy_interval (
+  user_id  <span class="kw">BIGINT</span>    <span class="kw">NOT NULL</span>,
+  during   <span class="kw">TSTZRANGE</span> <span class="kw">NOT NULL</span>,
+  party_id <span class="kw">BIGINT</span>    <span class="kw">NOT NULL</span>,
+  <span class="kw">EXCLUDE USING</span> gist (user_id <span class="kw">WITH</span> =, during <span class="kw">WITH</span> &amp;&amp;)
+);</pre>
+        </details>
+      </article>
+
+      <article class="gate">
+        <div class="gate-head">
+          <span class="gate-id">INV-3</span>
+          <span class="gate-title">요청 단일 배정</span>
+          <span class="gate-prob">문제 3 · M4</span>
+        </div>
+        <p class="gate-body">
+          하나의 요청은 최대 하나의 파티에만 속한다. <strong>유니크 제약으로 강제하면 배치가
+          구조적으로 멱등해진다</strong> — 재실행이 같은 요청을 다시 넣으려 하면 삽입이 실패하고,
+          그 실패를 정상 흐름으로 처리하면 된다. 락이 아니라 쓰기 자체가 멱등성을 보장한다.
+          단, <strong>제안 단계에서는 행을 만들지 않는다.</strong> 제안 실패 후 재대기(E1~E5)하면
+          두 번째 행이 생겨 제약에 걸리기 때문이다.
+        </p>
+        <details>
+          <summary>검사 질의와 제약</summary>
+          <pre><span class="kw">SELECT</span> request_id, <span class="kw">COUNT</span>(*) <span class="kw">AS</span> assigned_count
+<span class="kw">FROM</span> party_member
+<span class="kw">GROUP BY</span> request_id
+<span class="kw">HAVING</span> <span class="kw">COUNT</span>(*) &gt; 1;
+
+<span class="kw">ALTER TABLE</span> party_member
+  <span class="kw">ADD CONSTRAINT</span> uq_member_request <span class="kw">UNIQUE</span> (request_id);</pre>
+        </details>
+      </article>
+
+      <article class="gate">
+        <div class="gate-head">
+          <span class="gate-id">INV-4</span>
+          <span class="gate-title">포지션 중복</span>
+          <span class="gate-prob">문제 7 · M6</span>
+        </div>
+        <p class="gate-body">
+          한 파티 안에서 두 사람이 같은 포지션을 맡지 않는다. 5인 파티는 탑·정글·미드·바텀·서포터를
+          각각 한 명씩 채운다. 이탈한 자리는 다시 열려야 하므로 <strong>부분 유니크 인덱스</strong>로 강제한다.
+          빈자리 모집이 포지션 단위 좌석인 이유가 이것이다 —
+          <strong>좌석 하나가 곧 이 인덱스의 키 하나</strong>이고, 동시 지원자 중 하나만 삽입에 성공한다.
+        </p>
+        <details>
+          <summary>검사 질의와 제약</summary>
+          <pre><span class="kw">SELECT</span> party_id, position, <span class="kw">COUNT</span>(*) <span class="kw">AS</span> dup
+<span class="kw">FROM</span> party_member
+<span class="kw">WHERE</span> left_at <span class="kw">IS NULL</span>
+<span class="kw">GROUP BY</span> party_id, position
+<span class="kw">HAVING</span> <span class="kw">COUNT</span>(*) &gt; 1;
+
+<span class="kw">CREATE UNIQUE INDEX</span> uq_member_position
+  <span class="kw">ON</span> party_member (party_id, position) <span class="kw">WHERE</span> left_at <span class="kw">IS NULL</span>;</pre>
+        </details>
+      </article>
+
+      <article class="gate">
+        <div class="gate-head">
+          <span class="gate-id">INV-5</span>
+          <span class="gate-title">알림 중복 발송</span>
+          <span class="gate-prob">문제 5 · M5</span>
+        </div>
+        <p class="gate-body">
+          같은 알림을 두 번 보내지 않는다. 취소된 파티에 알림이 남아 있는 경우도 함께 검사한다.
+          전송은 at-least-once로 두고 중복 차단은 큐가 아니라 기록 쪽에서 보장한다.
+        </p>
+        <details>
+          <summary>검사 질의</summary>
+          <pre><span class="kw">SELECT</span> dedup_key, <span class="kw">COUNT</span>(*) <span class="kw">AS</span> sent
+<span class="kw">FROM</span> notification_job
+<span class="kw">WHERE</span> status = 'SENT'
+<span class="kw">GROUP BY</span> dedup_key
+<span class="kw">HAVING</span> <span class="kw">COUNT</span>(*) &gt; 1;
+
+<span class="kw">SELECT</span> n.id
+<span class="kw">FROM</span> notification_job n
+<span class="kw">JOIN</span> party p <span class="kw">ON</span> p.id = n.party_id
+<span class="kw">WHERE</span> p.status = 'CANCELLED'
+  <span class="kw">AND</span> n.status = 'SCHEDULED';</pre>
+        </details>
+      </article>
+
+    </div>
+
+    <h2>강제 수단</h2>
+    <p class="deck col">
+      다섯 중 <strong>넷은 제약으로 막을 수 있고, INV-1만 막을 수 없다.</strong>
+      정원은 행 하나의 속성이 아니라 집합의 크기이기 때문이다.
+    </p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="nowrap">불변식</th><th>강제 수단</th><th class="nowrap t-center">판정</th></tr></thead>
+        <tbody>
+          <tr><td class="id">INV-1</td><td><strong>없음 — 제어 전략을 비교하는 대상</strong> (비관적 락 · 낙관적 락 · 파티션 단일 라이터)</td><td class="t-center">0건</td></tr>
+          <tr><td class="id">INV-2</td><td><code>user_busy_interval</code> 배제 제약 vs 애플리케이션 사전 검증 — M3에서 결정</td><td class="t-center">0건</td></tr>
+          <tr><td class="id">INV-3</td><td><code>UNIQUE (request_id)</code></td><td class="t-center">0건</td></tr>
+          <tr><td class="id">INV-4</td><td><code>UNIQUE (party_id, position) WHERE left_at IS NULL</code></td><td class="t-center">0건</td></tr>
+          <tr><td class="id">INV-5</td><td><code>UNIQUE (dedup_key)</code></td><td class="t-center">0건</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <div class="note">
+        <span class="lead">검출기의 역할</span>
+        <p>
+          제약이 있는 넷에 대해 검출 질의는 위반을 찾는 장치가 아니라
+          <strong>제약이 실제로 걸려 있고 동작하는지 확인하는 장치</strong>다.
+          Redis가 통째로 날아가 분산 락이 사라져도 INV-3이 유지되는 것은 제약이 PostgreSQL에 있기 때문이며,
+          <strong>락은 최적화이고 정합성은 제약이 보장한다.</strong>
+        </p>
+      </div>
+    </div>
+
+    <div class="verdict">
+      <b>판정</b>
+      <span>다섯 게이트 전부 0건이어야 그 단계를 통과한 것으로 본다. 대응 <em>전</em> 위반이 0건이면 그 단계는 아직 시작하지 않은 것이다.</span>
+    </div>
+
+    <div class="pager">
+      <a class="prev" href="#/features"><span class="k">이전</span><span class="t">← 기능 명세</span></a>
+      <a class="next" href="#/milestones"><span class="k">다음</span><span class="t">마일스톤 →</span></a>
+    </div>
+  </article>
+
+  <!-- ============ 06 DATA MODEL ============ -->
+  <article class="page" id="page-data">
+    <div class="page-head">
+      <p class="eyebrow">Doc 06 · Data Model</p>
+      <h1>데이터 모델</h1>
+      <p class="standfirst">
+        테이블 열다섯 개. 목록이 목적은 아니다. 앞 문서의 불변식 다섯이
+        <strong>스키마의 어느 제약으로 박히는지</strong> 보이는 것이 이 문서의 일이다.
+      </p>
+    </div>
+
+    <div class="col">
+      <p class="deck">
+        <strong>권위 있는 상태만 그린다.</strong> 여기 있는 것은 전부 PostgreSQL이다.
+        Redis에 있는 것은 마지막 절에 따로 적었다 — 날아가도 불변식이 유지돼야 하는 쪽이라 표에 넣지 않았다.
+      </p>
+
+      <h2>관계 지도</h2>
+    </div>
+
+    <div class="dg">
+      <svg viewBox="0 0 1000 372" role="img" aria-label="party-matcher 데이터 모델 관계 지도">
+        <defs>
+          <marker id="erd-arrow" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto">
+            <path d="M0 0 L8 4 L0 8 Z" class="d-arrow"/>
+          </marker>
+          <marker id="erd-arrow-key" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto">
+            <path d="M0 0 L8 4 L0 8 Z" class="d-arrow-evt"/>
+          </marker>
+        </defs>
+
+        <!-- 영역 -->
+        <rect class="d-band-soft" x="20"  y="54" width="210" height="286" rx="10"/>
+        <rect class="d-band-soft" x="270" y="54" width="220" height="286" rx="10"/>
+        <rect class="d-band-soft" x="520" y="54" width="230" height="302" rx="10"/>
+        <rect class="d-band-soft" x="770" y="54" width="200" height="76"  rx="10"/>
+        <text class="d-band-lbl" x="28"  y="46">사용자</text>
+        <text class="d-band-lbl" x="278" y="46">요청 · 제안</text>
+        <text class="d-band-lbl" x="528" y="46">파티</text>
+        <text class="d-band-lbl" x="778" y="46">알림</text>
+
+        <!-- 사용자 -->
+        <g>
+          <rect class="d-box" x="40" y="74" width="170" height="36" rx="7"/>
+          <text class="d-name" x="52" y="90">app_user</text>
+          <text class="d-sub"  x="52" y="103">계정 · 프로필</text>
+        </g>
+        <path class="d-wire" d="M58 110 V308"/>
+        <path class="d-wire" d="M58 146 H76"/>
+        <path class="d-wire" d="M58 200 H76"/>
+        <path class="d-wire" d="M58 254 H76"/>
+        <path class="d-wire" d="M58 308 H76"/>
+        <g>
+          <rect class="d-box" x="76" y="128" width="134" height="36" rx="7"/>
+          <text class="d-name" x="88" y="144">riot_account</text>
+          <text class="d-sub"  x="88" y="157">1:1 · Riot 조회 사본</text>
+        </g>
+        <g>
+          <rect class="d-box" x="76" y="182" width="134" height="36" rx="7"/>
+          <text class="d-name" x="88" y="198">user_sub_position</text>
+          <text class="d-sub"  x="88" y="211">1:N · 부 포지션</text>
+        </g>
+        <g>
+          <rect class="d-box" x="76" y="236" width="134" height="36" rx="7"/>
+          <text class="d-name" x="88" y="252">push_subscription</text>
+          <text class="d-sub"  x="88" y="265">1:N · Web Push</text>
+        </g>
+        <g>
+          <rect class="d-box" x="76" y="290" width="134" height="36" rx="7"/>
+          <text class="d-name" x="88" y="306">user_relation</text>
+          <text class="d-sub"  x="88" y="319">1:N · 재회 · 차단</text>
+        </g>
+
+        <!-- 요청 · 제안 -->
+        <g>
+          <rect class="d-box" x="290" y="74" width="170" height="36" rx="7"/>
+          <text class="d-name" x="302" y="90">match_request</text>
+          <text class="d-sub"  x="302" y="103">요청 · 티어 스냅샷</text>
+        </g>
+        <path class="d-wire" d="M308 110 V146 H326"/>
+        <g>
+          <rect class="d-box" x="326" y="128" width="134" height="36" rx="7"/>
+          <text class="d-name" x="338" y="144">request_sub_position</text>
+          <text class="d-sub"  x="338" y="157">1:N · 요청의 부 포지션</text>
+        </g>
+        <g>
+          <rect class="d-box" x="290" y="210" width="170" height="36" rx="7"/>
+          <text class="d-name" x="302" y="226">match_offer</text>
+          <text class="d-sub"  x="302" y="239">제안 — 확정 전 단계</text>
+        </g>
+        <path class="d-wire" d="M308 246 V282 H326"/>
+        <text class="d-elbl" x="400" y="259">전원 동시 1:N</text>
+        <g>
+          <rect class="d-box" x="326" y="264" width="134" height="36" rx="7"/>
+          <text class="d-name" x="338" y="280">offer_participant</text>
+          <text class="d-sub"  x="338" y="293">수락 · 거절 응답</text>
+        </g>
+
+        <!-- 파티 -->
+        <g>
+          <rect class="d-box" x="540" y="74" width="170" height="36" rx="7"/>
+          <text class="d-name" x="552" y="90">party</text>
+          <text class="d-sub"  x="552" y="103">확정된 파티</text>
+        </g>
+        <path class="d-wire" d="M580 110 V134"/>
+        <path class="d-wire" d="M710 92 H790"/>
+        <path class="d-wire" d="M730 92 V332"/>
+        <path class="d-wire" d="M730 212 H710"/>
+        <path class="d-wire" d="M730 272 H710"/>
+        <path class="d-wire" d="M730 332 H710"/>
+        <text class="d-elbl" x="760" y="84" text-anchor="middle">발송 예약</text>
+        <g>
+          <rect class="d-box-hot" x="540" y="134" width="170" height="36" rx="7"/>
+          <text class="d-name" x="552" y="150">party_member</text>
+          <text class="d-sub"  x="552" y="163">정원만큼 · INV-1 · 3 · 4</text>
+        </g>
+        <g>
+          <rect class="d-box-hot" x="540" y="194" width="170" height="36" rx="7"/>
+          <text class="d-name" x="552" y="210">user_busy_interval</text>
+          <text class="d-sub"  x="552" y="223">INV-2 · 배제 제약</text>
+        </g>
+        <g>
+          <rect class="d-box" x="540" y="254" width="170" height="36" rx="7"/>
+          <text class="d-name" x="552" y="270">seat_recruitment</text>
+          <text class="d-sub"  x="552" y="283">빈자리 공개 모집</text>
+          <circle class="d-badge" cx="694" cy="266" r="9"/>
+          <text class="d-badge-t" x="694" y="269.5" text-anchor="middle">!</text>
+        </g>
+        <g>
+          <rect class="d-box" x="540" y="314" width="170" height="36" rx="7"/>
+          <text class="d-name" x="552" y="330">party_rating</text>
+          <text class="d-sub"  x="552" y="343">완료 후 1클릭 평가</text>
+        </g>
+
+        <!-- 알림 -->
+        <g>
+          <rect class="d-box-hot" x="790" y="74" width="170" height="36" rx="7"/>
+          <text class="d-name" x="802" y="90">notification_job</text>
+          <text class="d-sub"  x="802" y="103">INV-5 · dedup_key</text>
+        </g>
+
+        <!-- 교차 관계 -->
+        <path class="d-wire" d="M210 92 H286" marker-end="url(#erd-arrow)"/>
+        <text class="d-elbl" x="248" y="84" text-anchor="middle">신청 1:N</text>
+
+        <path class="d-wire-key" d="M460 92 C496 92, 500 152, 536 152" marker-end="url(#erd-arrow-key)"/>
+        <text class="d-elbl" x="466" y="76">확정 시 0..1</text>
+
+        <path class="d-wire" d="M290 102 H278 V282 H322" marker-end="url(#erd-arrow)"/>
+        <text class="d-elbl" x="271" y="196" text-anchor="middle" transform="rotate(-90 271 196)">제안마다 1:N</text>
+
+        <path class="d-wire" d="M540 272 H512 V22 H375 V70" marker-end="url(#erd-arrow)"/>
+        <text class="d-elbl" x="443" y="16" text-anchor="middle">선착순 충원 0..1</text>
+      </svg>
+    </div>
+    <p class="dg-cap">
+      선은 소유 방향이다. <code>app_user</code>는 거의 모든 테이블에서 <code>user_id</code>로 참조되므로,
+      선을 다 그리면 그래프가 읽히지 않는다. 그 참조는 아래 엔터티 사전에 적었다.
+    </p>
+
+    <div class="dg-key">
+      <div class="dg-key-row">
+        <span class="b" style="background:var(--accent)"></span>
+        <p><span class="h">색이 채워진 셋</span> — 불변식이 <strong>DB 제약으로 박힌</strong> 테이블이다.
+        코드가 실수해도 데이터베이스가 거절한다.</p>
+      </div>
+      <div class="dg-key-row">
+        <span class="b">!</span>
+        <p><span class="h">seat_recruitment</span> — 제약으로 막을 수 없는 유일한 자리다.
+        정원은 행이 아니라 <strong>집합의 크기</strong>라서, INV-1은 제어 전략으로 지켜야 한다.</p>
+      </div>
+    </div>
+
+    <div class="dg-strokes">
+      <span><i></i> 소유 · 참조</span>
+      <span><i style="border-top-color:var(--accent)"></i> 확정 경로 — INV-3이 걸리는 선</span>
+    </div>
+
+    <div class="col">
+      <h2>불변식이 박히는 자리</h2>
+      <p class="deck">이 문서의 결론이 이 표다. <strong>다섯 중 넷은 제약으로 막히고, INV-1만 못 막는다.</strong></p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="nowrap">불변식</th><th class="nowrap">스키마 구조</th><th>읽는 법</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="id">INV-1</td>
+            <td class="nowrap"><strong>없음</strong></td>
+            <td>정원은 행이 아니라 집합의 크기다. 제약으로 못 막는다 — <strong>그래서 M1 · M2가 여기 배정돼 있다</strong></td>
+          </tr>
+          <tr>
+            <td class="id">INV-2</td>
+            <td class="nowrap"><code>EXCLUDE USING gist</code></td>
+            <td>사용자와 시간 구간이 <strong>한 행에</strong> 있어야 성립한다. 그래서 전용 테이블을 뒀다</td>
+          </tr>
+          <tr>
+            <td class="id">INV-3</td>
+            <td class="nowrap"><code>party_member.request_id</code> PK</td>
+            <td>기본키 자체가 불변식이다. <strong>배치가 두 번 돌아도 두 번째 삽입이 실패한다</strong></td>
+          </tr>
+          <tr>
+            <td class="id">INV-4</td>
+            <td class="nowrap">부분 유니크 인덱스</td>
+            <td><code>WHERE left_at IS NULL</code> — 이탈한 자리가 다시 열려야 하므로 부분 인덱스여야 한다</td>
+          </tr>
+          <tr>
+            <td class="id">INV-5</td>
+            <td class="nowrap"><code>dedup_key</code> UNIQUE</td>
+            <td>전송은 at-least-once로 두고, <strong>차단은 기록 쪽에서</strong> 한다</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="gates">
+      <div class="gate" style="border-left-color:var(--accent)">
+        <div class="gate-head">
+          <span class="gate-id" style="color:var(--accent-ink)">DDL</span>
+          <span class="gate-title">불변식이 되는 제약</span>
+          <span class="gate-prob">PostgreSQL</span>
+        </div>
+        <details>
+          <summary>제약 정의 보기</summary>
+          <pre><span class="kw">-- INV-2  시간이 겹치는 두 파티에 동시 배정</span>
+CREATE TABLE user_busy_interval (
+  user_id  BIGINT    NOT NULL,
+  during   TSTZRANGE NOT NULL,
+  party_id BIGINT    NOT NULL,
+  EXCLUDE USING gist (user_id WITH =, during WITH &amp;&amp;)
+);
+
+<span class="kw">-- INV-3  요청 하나는 평생 최대 한 파티</span>
+ALTER TABLE party_member
+  ADD CONSTRAINT pk_member PRIMARY KEY (request_id);
+
+<span class="kw">-- INV-4  같은 파티 안 포지션 중복</span>
+CREATE UNIQUE INDEX uq_member_position
+  ON party_member (party_id, position) WHERE left_at IS NULL;
+
+<span class="kw">-- INV-5  알림 중복 발송</span>
+ALTER TABLE notification_job
+  ADD CONSTRAINT uq_notif_dedup UNIQUE (dedup_key);
+
+<span class="kw">-- 중복 평가 차단</span>
+ALTER TABLE party_rating
+  ADD CONSTRAINT pk_rating PRIMARY KEY (party_id, rater_id, ratee_id);</pre>
+        </details>
+      </div>
+    </div>
+
+    <div class="col">
+      <h2>관계에서 읽어야 할 것</h2>
+
+      <h3><code>match_request</code> → <code>party_member</code>는 0 또는 1이다</h3>
+      <p>
+        한 요청은 평생 최대 한 파티에만 속한다. 이탈한 요청은 재대기하지 않기 때문이다.
+        그래서 <code>party_member</code>의 기본키를 <code>request_id</code>로 잡았다.
+        <strong>기본키 자체가 INV-3이고, 그 덕에 예약 배치가 구조적으로 멱등해진다.</strong>
+      </p>
+
+      <h3><code>match_offer</code>는 <code>party</code>와 분리돼 있다</h3>
+      <p>
+        제안이 실패하면 참가자는 다시 대기한다. 제안 시점에 <code>party_member</code>를 만들면
+        재대기 후 두 번째 행이 생겨 방금의 기본키에 걸린다. 그래서 제안 참가자는
+        <code>offer_participant</code>에 담고, <code>party_member</code>는 <strong>확정 시점에만</strong> 만든다.
+        지도에서 <code>match_request</code> 밖으로 나가는 선이 둘인 이유가 이것이다.
+      </p>
+
+      <h3><code>seat_recruitment</code>가 좌석 경합의 무대다</h3>
+      <p>
+        좌석 하나는 <code>uq_member_position</code>의 키 하나이며, 동시 지원자 중 하나만 삽입에 성공한다.
+        <strong>그 제어를 어떻게 하느냐가 M2의 비교 대상이다.</strong>
+        좌석이 포지션 단위인 것도 여기서 나온다 — 경합 대상은 파티 정원이 아니라 특정 포지션의 자리 하나다.
+      </p>
+
+      <h2>엔터티 사전</h2>
+      <p class="deck">
+        <strong>도출한 것과 명세에 있던 것을 구분한다.</strong>
+        기술 보완 명세의 참조 스키마는 <em>검출에 필요한 최소 형태</em>였고, 서비스를 돌리려면 더 필요하다.
+      </p>
+
+      <h3>사용자</h3>
+    </div>
+
+    <div class="ents">
+      <div class="ent">
+        <h4>app_user <em>01에서 도출</em></h4>
+        <dl>
+          <dt>id <span class="kk pk">PK</span></dt><dd>bigint</dd>
+          <dt>discord_id <span class="kk uk">UK</span></dt><dd>OAuth2 신원</dd>
+          <dt>nickname</dt><dd>초기값은 Discord 표시 이름</dd>
+          <dt>voice_mode</dt><dd>필수 · 가능 · 사용안함</dd>
+          <dt>purpose</dt><dd>플레이 목적</dd>
+          <dt>mood</dt><dd>매칭 조건이 아니다</dd>
+          <dt>primary_position</dt><dd>기본 주 포지션</dd>
+          <dt>created_at</dt><dd>timestamptz</dd>
+        </dl>
+      </div>
+      <div class="ent">
+        <h4>riot_account <em>01에서 도출</em></h4>
+        <dl>
+          <dt>user_id <span class="kk pk">PK</span><span class="kk fk">FK</span></dt><dd>1:1</dd>
+          <dt>game_name · tag_line</dt><dd>Riot ID</dd>
+          <dt>puuid <span class="kk uk">UK</span></dt><dd>account-v1 조회 결과</dd>
+          <dt>solo_tier · division · lp</dt><dd>솔로 · 듀오 랭크</dd>
+          <dt>flex_tier · division · lp</dt><dd>자유 랭크</dd>
+          <dt>wins · losses</dt><dd>—</dd>
+          <dt>link_status</dt><dd>정상 · 확인필요 · 조회실패</dd>
+          <dt>refreshed_at</dt><dd>마지막 갱신 시각</dd>
+        </dl>
+      </div>
+      <div class="ent">
+        <h4>user_sub_position <em>01에서 도출</em></h4>
+        <dl>
+          <dt>user_id <span class="kk pk">PK</span><span class="kk fk">FK</span></dt><dd>app_user</dd>
+          <dt>position <span class="kk pk">PK</span></dt><dd>다중값이라 분리했다</dd>
+        </dl>
+      </div>
+      <div class="ent">
+        <h4>push_subscription <em>01 8.2에서 도출</em></h4>
+        <dl>
+          <dt>id <span class="kk pk">PK</span></dt><dd>bigint</dd>
+          <dt>user_id <span class="kk fk">FK</span></dt><dd>app_user</dd>
+          <dt>endpoint <span class="kk uk">UK</span></dt><dd>Web Push 구독</dd>
+          <dt>p256dh · auth</dt><dd>VAPID 키</dd>
+          <dt>created_at</dt><dd>—</dd>
+          <dt>revoked_at</dt><dd><code>410 Gone</code> 감지 시</dd>
+        </dl>
+      </div>
+      <div class="ent">
+        <h4>user_relation <em>02 참조 스키마</em></h4>
+        <dl>
+          <dt>user_id <span class="kk pk">PK</span><span class="kk fk">FK</span></dt><dd>app_user</dd>
+          <dt>other_id <span class="kk pk">PK</span><span class="kk fk">FK</span></dt><dd>app_user</dd>
+          <dt>kind</dt><dd>REUNION 또는 BLOCK</dd>
+          <dt>updated_at</dt><dd>—</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="col"><h3>요청 · 제안</h3></div>
+
+    <div class="ents">
+      <div class="ent key">
+        <h4>match_request <em>02 참조 스키마</em></h4>
+        <dl>
+          <dt>id <span class="kk pk">PK</span></dt><dd>bigint</dd>
+          <dt>user_id <span class="kk fk">FK</span></dt><dd>app_user</dd>
+          <dt>kind</dt><dd>IMMEDIATE 또는 SCHEDULED</dd>
+          <dt>queue · target_size</dt><dd>큐별 허용값만</dd>
+          <dt>status</dt><dd>대기중 · 제안됨 · 확정 · 취소됨 · 실패 · 이탈함</dd>
+          <dt>requested_at</dt><dd><strong>결정적 FCFS의 1차 정렬키</strong></dd>
+          <dt>play_minutes</dt><dd>INV-2의 전제 — 점유 구간의 길이</dd>
+          <dt>max_wait_minutes</dt><dd>즉시 매칭</dd>
+          <dt>window_start · end</dt><dd>예약 시작 가능 범위</dd>
+          <dt>tier_snapshot</dt><dd><strong>요청 생성 시점에 고정</strong></dd>
+          <dt>tier_snapshot_at</dt><dd>신선도 검증 대상</dd>
+          <dt>allowed_tier_min · max</dt><dd>허용 티어 범위</dd>
+          <dt>primary_position</dt><dd>—</dd>
+          <dt>purpose · voice_mode</dt><dd>—</dd>
+        </dl>
+      </div>
+      <div class="ent">
+        <h4>request_sub_position <em>01 2.4에서 도출</em></h4>
+        <dl>
+          <dt>request_id <span class="kk pk">PK</span><span class="kk fk">FK</span></dt><dd>match_request</dd>
+          <dt>position <span class="kk pk">PK</span></dt><dd>프로필 값과 다를 수 있다</dd>
+        </dl>
+      </div>
+      <div class="ent">
+        <h4>match_offer <em>01 5장에서 도출</em></h4>
+        <dl>
+          <dt>id <span class="kk pk">PK</span></dt><dd>bigint</dd>
+          <dt>queue · target_size</dt><dd>—</dd>
+          <dt>combo_hash</dt><dd>참가 요청 집합 해시 — 실패 조합 억제</dd>
+          <dt>created_at</dt><dd>제한시간의 기준</dd>
+          <dt>expires_at</dt><dd>—</dd>
+          <dt>status</dt><dd>대기 · 확정 · 거절 · 시간초과</dd>
+        </dl>
+      </div>
+      <div class="ent">
+        <h4>offer_participant <em>01 5.2에서 도출</em></h4>
+        <dl>
+          <dt>offer_id <span class="kk pk">PK</span><span class="kk fk">FK</span></dt><dd>match_offer</dd>
+          <dt>request_id <span class="kk pk">PK</span><span class="kk fk">FK</span></dt><dd>match_request</dd>
+          <dt>user_id <span class="kk fk">FK</span></dt><dd>app_user</dd>
+          <dt>position</dt><dd>배정 예정 포지션</dd>
+          <dt>response</dt><dd>PENDING · ACCEPTED · DECLINED · TIMEOUT</dd>
+          <dt>responded_at</dt><dd>조건부 전이로 중복 클릭을 멱등 처리</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="col"><h3>파티</h3></div>
+
+    <div class="ents">
+      <div class="ent">
+        <h4>party <em>02 참조 스키마</em></h4>
+        <dl>
+          <dt>id <span class="kk pk">PK</span></dt><dd>bigint</dd>
+          <dt>queue · target_size</dt><dd>—</dd>
+          <dt>start_at</dt><dd>즉시 매칭은 확정 시각</dd>
+          <dt>end_at</dt><dd>start_at + play_minutes</dd>
+          <dt>status</dt><dd>CONFIRMED · RECRUITING · CANCELLED · COMPLETED</dd>
+          <dt>purpose</dt><dd>좌석 지원 자격 판정용</dd>
+          <dt>voice_party</dt><dd>음성 파티 여부</dd>
+          <dt>confirmed_at</dt><dd>—</dd>
+          <dt>completed_at</dt><dd>이벤트 기반 완료</dd>
+        </dl>
+      </div>
+      <div class="ent key">
+        <h4>party_member <em>02 참조 스키마</em></h4>
+        <dl>
+          <dt>request_id <span class="kk pk">PK</span><span class="kk fk">FK</span></dt><dd><strong>PK가 곧 INV-3</strong></dd>
+          <dt>party_id <span class="kk fk">FK</span></dt><dd>party</dd>
+          <dt>user_id <span class="kk fk">FK</span></dt><dd>app_user</dd>
+          <dt>position</dt><dd><strong>INV-4 부분 유니크 키</strong></dd>
+          <dt>joined_at</dt><dd>—</dd>
+          <dt>left_at</dt><dd>NULL이면 현재 참가 중</dd>
+          <dt>leave_reason</dt><dd>—</dd>
+        </dl>
+      </div>
+      <div class="ent key">
+        <h4>user_busy_interval <em>02 참조 스키마</em></h4>
+        <dl>
+          <dt>user_id</dt><dd>app_user</dd>
+          <dt>during</dt><dd>tstzrange — <strong>배제 제약 대상</strong></dd>
+          <dt>party_id <span class="kk fk">FK</span></dt><dd>party</dd>
+        </dl>
+      </div>
+      <div class="ent">
+        <h4>seat_recruitment <em>01 7.4 · 7.5에서 도출</em></h4>
+        <dl>
+          <dt>id <span class="kk pk">PK</span></dt><dd>bigint</dd>
+          <dt>party_id <span class="kk fk">FK</span></dt><dd>party</dd>
+          <dt>position</dt><dd><strong>좌석은 포지션 단위다</strong></dd>
+          <dt>opened_at</dt><dd>—</dd>
+          <dt>deadline</dt><dd>예약은 시작 10분 전 · 즉시는 15분</dd>
+          <dt>closed_at</dt><dd>—</dd>
+          <dt>status</dt><dd>OPEN · FILLED · EXPIRED</dd>
+          <dt>filled_by_request_id <span class="kk fk">FK</span></dt><dd>충원된 요청 — 0 또는 1</dd>
+        </dl>
+      </div>
+      <div class="ent">
+        <h4>party_rating <em>02 참조 스키마</em></h4>
+        <dl>
+          <dt>party_id <span class="kk pk">PK</span><span class="kk fk">FK</span></dt><dd>party</dd>
+          <dt>rater_id <span class="kk pk">PK</span><span class="kk fk">FK</span></dt><dd>app_user</dd>
+          <dt>ratee_id <span class="kk pk">PK</span><span class="kk fk">FK</span></dt><dd>app_user</dd>
+          <dt>verdict</dt><dd>AGAIN 또는 NO</dd>
+          <dt>rated_at</dt><dd>—</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="col"><h3>알림</h3></div>
+
+    <div class="ents">
+      <div class="ent key">
+        <h4>notification_job <em>02 참조 스키마</em></h4>
+        <dl>
+          <dt>id <span class="kk pk">PK</span></dt><dd>bigint</dd>
+          <dt>party_id <span class="kk fk">FK</span></dt><dd>party</dd>
+          <dt>user_id <span class="kk fk">FK</span></dt><dd>app_user</dd>
+          <dt>kind</dt><dd>제안 · 확정 · 충원 · 취소 · 준비확인 · 리마인더 · 평가요청</dd>
+          <dt>channel</dt><dd>INAPP · WEBPUSH · DISCORD</dd>
+          <dt>fire_at</dt><dd>지연 큐의 score</dd>
+          <dt>status</dt><dd>SCHEDULED · SENT · CANCELLED · FAILED</dd>
+          <dt>dedup_key <span class="kk uk">UK</span></dt><dd><strong>INV-5</strong></dd>
+          <dt>sent_at</dt><dd>—</dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="col">
+      <h2>여기 없는 것 — Redis</h2>
+      <p class="deck">
+        <strong>Redis가 통째로 날아가도 다섯 불변식은 유지된다.</strong> 제약이 PostgreSQL에 있기 때문이다.
+        그래서 아래 다섯은 테이블을 만들지 않았다.
+      </p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="nowrap">대상</th><th class="nowrap">자료구조</th><th>테이블을 두지 않는 이유</th></tr></thead>
+        <tbody>
+          <tr><td class="nowrap">분산 락</td><td class="nowrap">문자열 + TTL</td><td>락은 최적화다. 정합성은 제약이 보장한다</td></tr>
+          <tr><td class="nowrap">제안 전파</td><td class="nowrap">Pub/Sub</td><td>인스턴스 간 팬아웃. 상태가 아니라 신호다</td></tr>
+          <tr><td class="nowrap">알림 지연 큐</td><td class="nowrap">Sorted Set</td><td>score = 발송 예정 시각. 회수 가능해야 한다</td></tr>
+          <tr><td class="nowrap">Riot 조회 캐시</td><td class="nowrap">문자열 + TTL</td><td><strong>매칭은 이걸 읽지 않는다</strong> — 요청의 스냅샷을 읽는다</td></tr>
+          <tr><td class="nowrap">실패 조합 억제</td><td class="nowrap">문자열 + TTL 10분</td><td>영구 보관하지 않으므로 테이블로 두지 않는다</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <h2>아직 정하지 않은 것</h2>
+      <div class="note">
+        <span class="lead">M0에서 측정하며 정한다</span>
+        <p>
+          <strong>인덱스 설계</strong> — 결정적 FCFS의 정렬키 <code>(requested_at, id)</code>와
+          후보 필터 조건의 복합 인덱스는 부하를 재며 정한다.<br>
+          <strong>파티션</strong> — 예약 배치가 날짜 단위로 도는데 <code>match_request</code>를 날짜로 나눌지는
+          처리량 측정 후 결정한다.<br>
+          <strong>상태 기계</strong> — <code>status</code> 컬럼들의 전이 규칙은 M0의 도메인 모델 작업에서 확정한다.<br>
+          <strong>보존 기간</strong> — 전체 이용 내역을 남기지 않기로 했으므로, 완료된 파티와 발송된 알림의
+          정리 정책이 필요하다.
+        </p>
+      </div>
+    </div>
+
+    <div class="pager"></div>
+  </article>
+
+  <!-- ============ 07 MILESTONES ============ -->
+  <article class="page" id="page-milestones">
+    <div class="page-head">
+      <p class="eyebrow">Doc 07 · Milestones</p>
+      <h1>마일스톤</h1>
+      <p class="standfirst">
+        각 단계는 <strong>보여줄 수 있는 한 문장</strong>이 완성되는 단위다.
+        최대 리스크(좌석 경합이 재현되는가)를 M1에 배치해 조기 판정한다.
+      </p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="nowrap">단계</th><th class="nowrap">포함 기능</th><th>완성 서사</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="id">M0</td>
+            <td class="nowrap">A1·A2 / I1·I2·I3</td>
+            <td><strong>"위반을 셀 수 있다"</strong> — 도메인 모델·상태 기계·부하 발생기·검출기. 여기서 INV 질의가 먼저 돌아야 이후 단계의 수치가 의미를 갖는다</td>
+          </tr>
+          <tr>
+            <td class="id">M1</td>
+            <td class="nowrap">F1·F3·F4·F5 (무제어)</td>
+            <td><strong>"정원 초과가 눈앞에서 발생한다"</strong> — 제어 없는 빈자리 충원으로 INV-1 재현. <strong>부하는 예약 파티로 짜야 한다</strong> — 즉시 매칭 파티는 모집 창이 짧아 경합 밀도가 낮다. 재현 실패 시 부하 동시성과 인스턴스 수를 먼저 의심한다</td>
+          </tr>
+          <tr>
+            <td class="id">M2</td>
+            <td class="nowrap">D6 / F5 재구현</td>
+            <td><strong>"정원 초과 0, 세 전략의 대가를 안다"</strong> — 비관적 락 · 낙관적 락 · 파티션 단일 라이터를 같은 부하로 비교</td>
+          </tr>
+          <tr>
+            <td class="id">M3</td>
+            <td class="nowrap">C1·C5 / D1·D2 / F6</td>
+            <td><strong>"시간이 겹치는 두 파티에 못 들어간다"</strong> — INV-2 차단. 제약 위치(DB 배제 제약 vs 애플리케이션)를 측정으로 결정</td>
+          </tr>
+          <tr>
+            <td class="id">M4</td>
+            <td class="nowrap">C2 / D3 / H1~H4</td>
+            <td><strong>"배치를 두 번 돌려도 결과가 같다"</strong> — 결정적 FCFS + 조건부 쓰기. 락 만료 중 작업 지속까지 포함</td>
+          </tr>
+          <tr>
+            <td class="id">M5</td>
+            <td class="nowrap">C4 / E1~E5 / G1~G4 / H5</td>
+            <td><strong>"두 인스턴스에 흩어진 참가자가 같은 순간에 제안을 받는다"</strong> — 팬아웃·만료·재연결 복구와 알림 회수·중복 차단</td>
+          </tr>
+          <tr>
+            <td class="id">M6</td>
+            <td class="nowrap">B3~B6 / D4·D5 / I4·I5 / E6·F7·G5</td>
+            <td><strong>"호출을 줄이고, 5인 포지션을 배정하고, 요청 1건의 경로를 복원한다"</strong> — 캐싱·병합·스탬피드, 이분 매칭, MDC 추적</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <div class="note">
+        <span class="lead">M1이 실패 신호를 주면</span>
+        <p>
+          "위반이 안 나온다"는 좋은 소식이 아니다. 인스턴스가 실제로 2대인지, 부하 발생기가 정말
+          동시에 지원을 보내는지, 좌석 확정 경로가 우연히 직렬화되고 있지는 않은지를 먼저 확인한다.
+          <strong>재현 건수 자체를 M1의 통과 조건으로 둔다.</strong>
+        </p>
+      </div>
+    </div>
+
+    <div class="pager">
+      <a class="prev" href="#/invariants"><span class="k">이전</span><span class="t">← 불변식</span></a>
+      <a class="next" href="#/metrics"><span class="k">다음</span><span class="t">측정 →</span></a>
+    </div>
+  </article>
+
+  <!-- ============ 08 METRICS ============ -->
+  <article class="page" id="page-metrics">
+    <div class="page-head">
+      <p class="eyebrow">Doc 08 · Metrics</p>
+      <h1>측정</h1>
+      <p class="standfirst">
+        목표 수치는 측정 전 설정값이다. 조정할 경우 이전 값과 사유를 함께 남긴다.
+        <strong>유효 조건 없이 적힌 목표치는 지표가 아니다.</strong>
+      </p>
+    </div>
+
+    <h2>목표치와 유효 조건</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="nowrap">항목</th><th class="nowrap">목표</th><th>이 목표가 유효한 조건</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="nowrap">매칭 요청 생성 p95</td>
+            <td class="nowrap mono-num">200ms 이하</td>
+            <td>인스턴스 2대, 동시 대기자 200명 구간</td>
+          </tr>
+          <tr>
+            <td class="nowrap">제안 전달 지연 p95</td>
+            <td class="nowrap mono-num">1초 이하</td>
+            <td>참가자가 서로 다른 인스턴스에 분산된 상태. 시작점은 <strong>확정 트랜잭션 커밋 시각</strong>, 단일 시계 기준 수집</td>
+          </tr>
+          <tr>
+            <td class="nowrap">외부 API 호출 감소율</td>
+            <td class="nowrap mono-num">80% 이상</td>
+            <td><strong>신선도 10분(B3)을 지킨 상태에서.</strong> 이 제약이 없으면 TTL만 늘려도 달성되므로 지표가 아니다. 신선도는 <strong>요청 생성 시점에만</strong> 강제하므로 배치는 Riot을 호출하지 않는다</td>
+          </tr>
+          <tr>
+            <td class="nowrap">예약 배치 처리량</td>
+            <td class="nowrap mono-num">10,000건 / 60초</td>
+            <td><strong>잠정값.</strong> 5인 파티 포지션 배정은 조합 탐색이라 D4·D5의 복잡도가 정해진 뒤 확정한다. 지금은 기준선이지 측정 대상이 아니다</td>
+          </tr>
+          <tr>
+            <td class="nowrap">매칭 성립률</td>
+            <td class="nowrap">곡선으로 보고</td>
+            <td>대기자 10 / 30 / 50 / 100 / 200 구간. <strong>두 분포에서 각각</strong> 잰다 — 어느 쪽 수치인지 명시하지 않은 성립률은 쓰지 않는다</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <h2>부하 프로파일과 입력 분포</h2>
+      <div class="note">
+        <span class="lead">씨드 ≠ 타당성</span>
+        <p>
+          씨드값은 재현성을 보장하지 타당성을 보장하지 않는다.
+          티어를 균등분포로 뿌리면 성립률이 실제보다 높게 나오고, 실제 분포를 쓰면 크게 달라진다.
+          <strong>입력 분포를 함께 고정한다.</strong>
+        </p>
+      </div>
+      <ul>
+        <li><strong>균등 분포</strong> — 알고리즘 자체의 성능을 보는 조건</li>
+        <li><strong>실제 분포 근사</strong> — 하위·중위 티어에 몰린 실제 롤 분포. 성립률의 현실성을 보는 조건</li>
+        <li>포지션 선호도 비균등으로 둔다. 서포터·정글 지원이 적은 실제 경향을 반영한다.</li>
+      </ul>
+
+      <h2>지표 정의</h2>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th class="nowrap">지표</th><th>정의</th></tr></thead>
+        <tbody>
+          <tr><td class="nowrap">매칭 요청 생성 p95</td><td>요청 수신 ~ 응답 반환</td></tr>
+          <tr><td class="nowrap">제안 전달 지연 p95</td><td>파티 확정 트랜잭션 <strong>커밋 시각</strong> ~ 클라이언트 수신 시각</td></tr>
+          <tr><td class="nowrap">예약 배치 처리량</td><td>배치 시작 ~ 종료, 처리 요청 수</td></tr>
+          <tr><td class="nowrap">외부 API 호출 수</td><td>시나리오당 Riot API 실제 호출 횟수</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col">
+      <p>
+        측정 환경(머신 사양, 부하 도구와 옵션, 커넥션 풀 크기), 씨드값, 설정값을 결과와 함께 기록한다.
+        모든 지표는 인스턴스 2대 구성에서 잰다.
+      </p>
+    </div>
+
+    <div class="pager">
+      <a class="prev" href="#/milestones"><span class="k">이전</span><span class="t">← 마일스톤</span></a>
+      <a class="next" href="#/risks"><span class="k">다음</span><span class="t">리스크 →</span></a>
+    </div>
+  </article>
+
+  <!-- ============ 09 RISKS ============ -->
+  <article class="page" id="page-risks">
+    <div class="page-head">
+      <p class="eyebrow">Doc 09 · Risks</p>
+      <h1>리스크</h1>
+      <p class="standfirst">가장 큰 위험은 문제가 어려운 것이 아니라, 문제가 재현되지 않는 것이다.</p>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>리스크</th><th class="nowrap">영향</th><th>대응 · 검증</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>좌석 경합이 재현되지 않음</strong> — 인스턴스 1대, 부하가 실제로는 직렬, 우연한 순차화</td>
+            <td class="nowrap">M1·M2 전체가 무의미</td>
+            <td>App×2 강제, 부하 발생기 동시성 자체를 먼저 검증, 재현 건수를 통과 조건으로</td>
+          </tr>
+          <tr>
+            <td><strong>배치 조합 탐색 복잡도 미확정</strong></td>
+            <td class="nowrap">처리량 목표 무근거</td>
+            <td>M6까지 목표를 잠정값으로 명시, D5 가지치기 후 재설정하고 사유 기록</td>
+          </tr>
+          <tr>
+            <td><strong>Riot 개발용 키 24시간 만료</strong> · 공개 서비스 운영 불가</td>
+            <td class="nowrap">데모 제약</td>
+            <td>어댑터 뒤로 격리해 M0~M5는 fake adapter로 진행, M6에서 실 API 연결. Personal key는 키만 교체</td>
+          </tr>
+          <tr>
+            <td><strong>입력 분포를 임의로 고름</strong></td>
+            <td class="nowrap">성립률 수치 신뢰 불가</td>
+            <td>균등 · 실제 근사 2종 병행. 포지션 선호도 비균등으로</td>
+          </tr>
+          <tr>
+            <td><strong>락 만료 중 작업 지속</strong> — TTL이 배치 소요보다 짧음</td>
+            <td class="nowrap">멱등성 착시</td>
+            <td>락을 최적화로만 취급하고 멱등성은 조건부 쓰기로 보장. 락 강제 만료 시나리오를 H4에 포함</td>
+          </tr>
+          <tr>
+            <td><strong>브라우저 알림 권한 거부</strong> — 특히 모바일·iOS는 홈 화면 추가 없이는 받지 못한다</td>
+            <td class="nowrap">예약 알림 미전달</td>
+            <td>권한을 게이트로 쓰지 않는다. 인앱 폴백 + 실패 건수 계수. PC가 주 사용 맥락이라는 전제를 성립률과 함께 검증한다</td>
+          </tr>
+          <tr>
+            <td><strong>매칭 밀도 부족</strong> — 하드 필터 + 완화 없음</td>
+            <td class="nowrap">성립률 구조적 저하</td>
+            <td>성립률 곡선으로 실용 임계점을 찾고, 조건 완화 도입 시점의 근거로 사용</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pager">
+      <a class="prev" href="#/metrics"><span class="k">이전</span><span class="t">← 측정</span></a>
+      <a class="next" href="#/outcome"><span class="k">다음</span><span class="t">결과물 →</span></a>
+    </div>
+  </article>
+
+  <!-- ============ 10 OUTCOME ============ -->
+  <article class="page" id="page-outcome">
+    <div class="page-head">
+      <p class="eyebrow">Doc 10 · Outcome</p>
+      <h1>예상 결과물</h1>
+      <p class="standfirst">
+        전 단계를 통과했을 때 남는 것.
+        <strong>아래 수치는 전부 목표값이며 아직 측정되지 않았다.</strong>
+      </p>
+    </div>
+
+    <div class="col">
+      <p class="deck">측정 전에 달성한 것처럼 쓰지 않는다. 측정이 끝나면 실측값으로 교체한다.</p>
+    </div>
+
+    <div class="rlines">
+      <div class="rline">
+        <p>
+          확정 파티 빈자리 충원의 <span class="metric">좌석 경합을 App 인스턴스 2대 환경에서 재현</span>하고,
+          비관적 락 · 낙관적 락 · 파티션 단일 라이터 3개 전략을 동일 부하로 비교 —
+          정원 초과 0건을 유지하며 전략별 처리량 · p95 차이 측정
+          <span class="tag">문제 1 · INV-1 · M1~M2</span>
+        </p>
+      </div>
+      <div class="rline">
+        <p>
+          시간이 겹치는 중복 배정을 <span class="metric">PostgreSQL GiST 배제 제약</span>
+          (<code>user_id WITH =</code>, <code>tstzrange WITH &amp;&amp;</code>)으로 차단 —
+          애플리케이션 사전 검증 대비 경합 조건에서의 누락 제거를 검출 질의로 입증
+          <span class="tag">문제 2 · INV-2 · M3</span>
+        </p>
+      </div>
+      <div class="rline">
+        <p>
+          00시 예약 매칭 배치의 <span class="metric">멱등성 확보</span> —
+          순차 재실행 · 2인스턴스 동시 실행 · 락 TTL 만료 중 작업 지속 3개 시나리오에서 중복 배정 0건.
+          결정적 FCFS 정렬로 동일 입력 → 동일 파티 구성 보장
+          <span class="tag">문제 3 · INV-3 · M4</span>
+        </p>
+      </div>
+      <div class="rline">
+        <p>
+          제안 팬아웃을 <span class="metric">Redis Pub/Sub 기반 인스턴스 간 전파</span>로 구성해
+          서로 다른 인스턴스에 접속한 참가자 전원에게 동시 전달 —
+          수락 제한시간을 제안 생성 시각 기준으로 고정해 수신 순서에 따른 유불리 제거, 전달 지연 p95 1초 이하
+          <span class="tag">문제 4 · M5</span>
+        </p>
+      </div>
+      <div class="rline">
+        <p>
+          Riot API 조회를 <span class="metric">single-flight 병합 + 신선도 10분 캐시</span>로 재구성 —
+          신선도 제약을 유지한 조건에서 호출 수 80% 감소, 캐시 전체 소실 시 스탬피드 대응 포함
+          <span class="tag">문제 6 · M6</span>
+        </p>
+      </div>
+    </div>
+
+    <div class="pager">
+      <a class="prev" href="#/risks"><span class="k">이전</span><span class="t">← 리스크</span></a>
+      <a class="next" href="#/index"><span class="k">돌아가기</span><span class="t">문서맵 →</span></a>
+    </div>
+  </article>
+
+</div>
+
+<footer class="site">
+  party-matcher · Port-051 · 리그 오브 레전드 파티 자동 매칭 백엔드.
+  수치는 측정 전 목표값이며, 재현되지 않은 문제는 해결됐다고 적지 않는다.
+</footer>
+
+<script id="docscript">
+  (function () {
+    var DEFAULT = 'index';
+    var TITLE = 'party-matcher 백엔드 설계';
+    var DRAFT_KEY = 'pm-draft-v1';
+
+    var wrap = document.getElementById('wrap');
+    var topbar = document.getElementById('topbar');
+    var navlinks = topbar.querySelector('.navlinks');
+    var tools = topbar.querySelector('.tools');
+    // 저장본에 넣을 도구모음 원본. 스크립트가 손대기 전에 잡아둔다.
+    var TOOLS_HTML = tools.innerHTML;
+
+    var btnStart = document.getElementById('ed-start');
+    var btnSave = document.getElementById('ed-save');
+    var btnCancel = document.getElementById('ed-cancel');
+
+    var pages = {}, order = [], titles = {};
+    var editing = false, snapshot = null, api = null, bar = null;
+
+    /* ---------- 문서 목록 ---------- */
+
+    function scan() {
+      pages = {}; order = [];
+      Array.prototype.forEach.call(wrap.querySelectorAll('.page'), function (el) {
+        var k = el.id.replace('page-', '');
+        pages[k] = el; order.push(k);
+      });
+      Array.prototype.forEach.call(navlinks.querySelectorAll('a'), function (a) {
+        titles[a.getAttribute('href').replace('#/', '')] = a.textContent.trim();
+      });
+    }
+
+    function isOff(k) { return !!(pages[k] && pages[k].classList.contains('doc-off')); }
+    function visible() { return order.filter(function (k) { return !isOff(k); }); }
+
+    /* ---------- 내비게이션 · 페이저 ---------- */
+
+    function pagerLink(cls, key, label) {
+      var a = document.createElement('a');
+      a.className = cls;
+      a.setAttribute('href', '#/' + key);
+      var k = document.createElement('span');
+      k.className = 'k';
+      k.textContent = cls === 'prev' ? '이전' : '다음';
+      var t = document.createElement('span');
+      t.className = 't';
+      t.textContent = label;
+      a.appendChild(k); a.appendChild(t);
+      return a;
+    }
+
+    function spacer() {
+      var s = document.createElement('span');
+      s.className = 'spacer';
+      return s;
+    }
+
+    // 문서를 숨기면 앞뒤 연결이 끊기므로 페이저는 매번 보이는 문서만으로 다시 만든다.
+    function renderPagers() {
+      var vis = visible();
+      order.forEach(function (k) {
+        var pager = pages[k].querySelector('.pager');
+        if (!pager) return;
+        pager.textContent = '';
+        var i = vis.indexOf(k);
+        var prev = i > 0 ? vis[i - 1] : null;
+        var next = (i >= 0 && i < vis.length - 1) ? vis[i + 1] : null;
+        pager.appendChild(prev ? pagerLink('prev', prev, '← ' + titles[prev]) : spacer());
+        if (next) pager.appendChild(pagerLink('next', next, titles[next] + ' →'));
+        else if (k !== DEFAULT) pager.appendChild(pagerLink('next', DEFAULT, titles[DEFAULT] + ' →'));
+        else pager.appendChild(spacer());
+      });
+    }
+
+    function renderChrome() {
+      Array.prototype.forEach.call(navlinks.querySelectorAll('a'), function (a) {
+        a.classList.toggle('is-off', isOff(a.getAttribute('href').replace('#/', '')));
+      });
+      Array.prototype.forEach.call(wrap.querySelectorAll('.cards .card'), function (a) {
+        a.classList.toggle('is-off', isOff((a.getAttribute('href') || '').replace('#/', '')));
+      });
+      renderPagers();
+    }
+
+    function keyFromHash() {
+      var h = (location.hash || '').replace(/^#\/?/, '');
+      return pages[h] ? h : DEFAULT;
+    }
+
+    function show(key, scroll) {
+      if (!pages[key]) key = DEFAULT;
+      Object.keys(pages).forEach(function (k) {
+        var open = k === key;
+        pages[k].classList.toggle('is-open', open);
+        pages[k].hidden = !open;
+      });
+      Array.prototype.forEach.call(navlinks.querySelectorAll('a'), function (a) {
+        if (a.getAttribute('href') === '#/' + key) { a.setAttribute('aria-current', 'page'); }
+        else { a.removeAttribute('aria-current'); }
+      });
+      if (scroll) { window.scrollTo(0, 0); }
+      var h1 = pages[key].querySelector('h1');
+      if (h1) { document.title = h1.textContent.trim() + ' · party-matcher'; }
+    }
+
+    // 이 페이지는 iframe 안에서 열릴 수 있다. 그 경우 앵커 클릭이 상위 프레임으로
+    // 전달돼 내부 hashchange가 발생하지 않으므로, 클릭을 직접 가로채 전환한다.
+    document.addEventListener('click', function (e) {
+      var a = e.target.closest ? e.target.closest('a[href^="#/"]') : null;
+      if (!a) return;
+      // 편집 중에는 본문 안의 링크 클릭이 캐럿 이동이어야 한다. 상단 내비만 이동시킨다.
+      if (editing && wrap.contains(a)) return;
+      var key = a.getAttribute('href').replace(/^#\//, '');
+      if (!pages[key]) return;
+      e.preventDefault();
+      try { history.replaceState(null, '', '#/' + key); } catch (err) { /* iframe 제약 */ }
+      show(key, true);
+    });
+
+    window.addEventListener('hashchange', function () { show(keyFromHash(), true); });
+
+    /* ---------- 상태 표시줄 ---------- */
+
+    function status(msg, tone) {
+      if (!bar) {
+        bar = document.createElement('div');
+        bar.className = 'editbar ed-ui';
+        bar.setAttribute('contenteditable', 'false');
+        document.body.appendChild(bar);
+      }
+      bar.textContent = msg;
+      bar.setAttribute('data-tone', tone || 'info');
+      bar.hidden = !msg;
+    }
+
+    function readOnly(msg) {
+      editing = false;
+      document.body.removeAttribute('data-mode');
+      setEditable(false);
+      removeDocCtl();
+      btnStart.hidden = true; btnSave.hidden = true; btnCancel.hidden = true;
+      var chip = tools.querySelector('.ro');
+      if (!chip) {
+        chip = document.createElement('span');
+        chip.className = 'ro';
+        tools.appendChild(chip);
+      }
+      chip.textContent = '읽기 전용';
+      if (msg) status(msg, 'warn');
+    }
+
+    /* ---------- 편집 ---------- */
+
+    function setEditable(on) {
+      order.forEach(function (k) {
+        if (on) { pages[k].setAttribute('contenteditable', 'true'); pages[k].setAttribute('spellcheck', 'false'); }
+        else { pages[k].removeAttribute('contenteditable'); pages[k].removeAttribute('spellcheck'); }
+      });
+      Array.prototype.forEach.call(wrap.querySelectorAll('.pager'), function (p) {
+        if (on) { p.setAttribute('contenteditable', 'false'); } else { p.removeAttribute('contenteditable'); }
+      });
+    }
+
+    function addDocCtl() {
+      order.forEach(function (k) {
+        if (k === DEFAULT) return;
+        var el = pages[k];
+        if (el.querySelector('.docctl')) return;
+        var b = document.createElement('div');
+        b.className = 'docctl ed-ui';
+        b.setAttribute('contenteditable', 'false');
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('data-doc', k);
+        btn.textContent = isOff(k) ? '이 문서 다시 보이기' : '이 문서 숨기기';
+        var hint = document.createElement('span');
+        hint.className = 'hint';
+        hint.textContent = '숨겨도 내용은 남는다 — 목차와 상단 메뉴에서만 빠진다';
+        b.appendChild(btn); b.appendChild(hint);
+        el.insertBefore(b, el.firstChild);
+      });
+    }
+
+    function removeDocCtl(root) {
+      Array.prototype.forEach.call((root || document).querySelectorAll('.ed-ui'), function (n) {
+        if (n !== bar) { n.remove(); }
+      });
+    }
+
+    wrap.addEventListener('click', function (e) {
+      var btn = e.target.closest ? e.target.closest('.docctl button') : null;
+      if (!btn) return;
+      e.preventDefault();
+      var k = btn.getAttribute('data-doc');
+      if (!pages[k]) return;
+      pages[k].classList.toggle('doc-off');
+      btn.textContent = isOff(k) ? '이 문서 다시 보이기' : '이 문서 숨기기';
+      renderChrome();
+      status(isOff(k) ? ('"' + titles[k] + '" 숨김 — 저장해야 모두에게 반영된다') : ('"' + titles[k] + '" 다시 보임 — 저장해야 모두에게 반영된다'), 'info');
+    });
+
+    wrap.addEventListener('paste', function (e) {
+      if (!editing) return;
+      e.preventDefault();
+      var text = ((e.clipboardData || window.clipboardData).getData('text/plain') || '');
+      try { document.execCommand('insertText', false, text); } catch (err) { /* 무시 */ }
+    });
+
+    function startEdit() {
+      if (!api) { readOnly('이 화면에서는 편집할 수 없다.'); return; }
+      editing = true;
+      snapshot = wrap.innerHTML;
+      document.body.setAttribute('data-mode', 'edit');
+      setEditable(true);
+      addDocCtl();
+      btnStart.hidden = true; btnSave.hidden = false; btnCancel.hidden = false;
+      status('편집 중 — 저장하면 이 링크를 가진 모두에게 새 버전으로 게시된다 (⌘/Ctrl+S)', 'info');
+    }
+
+    function endEdit() {
+      editing = false;
+      document.body.removeAttribute('data-mode');
+      setEditable(false);
+      removeDocCtl();
+      btnStart.hidden = false; btnSave.hidden = true; btnCancel.hidden = true;
+    }
+
+    function cancelEdit() {
+      if (snapshot !== null) {
+        wrap.innerHTML = snapshot;
+        scan(); renderChrome(); show(keyFromHash(), false);
+      }
+      snapshot = null;
+      endEdit();
+      status('편집을 취소했다.', 'info');
+      setTimeout(function () { status(''); }, 2500);
+    }
+
+    /* ---------- 저장할 원본 만들기 ---------- */
+
+    // 살아 있는 DOM을 그대로 직렬화하지 않는다. 뷰어 세션에서 붙은 상태
+    // (열린 문서, 편집 속성, 편집 UI)를 걷어낸 뒤 문서 부분만 옮긴다.
+    function clean(el) {
+      var c = el.cloneNode(true);
+      Array.prototype.forEach.call(c.querySelectorAll('.ed-ui'), function (n) { n.remove(); });
+      var all = [c].concat(Array.prototype.slice.call(c.querySelectorAll('*')));
+      all.forEach(function (n) {
+        n.removeAttribute('contenteditable');
+        n.removeAttribute('spellcheck');
+        n.removeAttribute('aria-current');
+        n.removeAttribute('data-id');
+        if (n.tagName === 'ARTICLE') { n.removeAttribute('hidden'); }
+        if (n.tagName === 'DETAILS') { n.removeAttribute('open'); }
+        if (n.classList) {
+          n.classList.remove('is-open');
+          if (!n.classList.length) { n.removeAttribute('class'); }
+        }
+      });
+      return c;
+    }
+
+    function buildSource() {
+      var style = document.getElementById('docstyle').outerHTML;
+      var nav = clean(topbar);
+      var t = nav.querySelector('.tools');
+      if (t) { t.innerHTML = TOOLS_HTML; }
+      var body = clean(wrap);
+      var foot = clean(document.querySelector('footer.site'));
+      var script = document.getElementById('docscript').outerHTML;
+      return '<!doctype html>\n<html lang="ko">\n<head>\n<meta charset="utf-8">\n'
+        + '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
+        + '<title>' + TITLE + '</title>\n'
+        + style + '\n</head>\n<body>\n'
+        + nav.outerHTML + '\n\n' + body.outerHTML + '\n\n' + foot.outerHTML + '\n\n'
+        + script + '\n</body>\n</html>\n';
+    }
+
+    function save() {
+      if (!api || !editing) return;
+      var html;
+      try { html = buildSource(); }
+      catch (err) { status('저장본을 만들지 못했다: ' + err.message, 'warn'); return; }
+      // 충돌 시 이 화면은 최신 버전으로 새로고침된다. 편집분을 먼저 남겨둔다.
+      try { sessionStorage.setItem(DRAFT_KEY, wrap.innerHTML); } catch (err) { /* 무시 */ }
+      btnSave.disabled = true;
+      status('저장 중…', 'info');
+      api.publish(html).then(function () {
+        try { sessionStorage.removeItem(DRAFT_KEY); } catch (err) { /* 무시 */ }
+        status('저장했다. 새 버전으로 새로고침된다.', 'ok');
+      }, function (err) {
+        btnSave.disabled = false;
+        var code = (err && err.code) || 'unknown';
+        if (code === 'conflict') {
+          status('다른 사람이 먼저 저장했다. 최신 버전으로 새로고침되며, 방금 편집한 내용은 복원 배너로 남는다.', 'warn');
+        } else if (code === 'not_writer' || code === 'not_granted' || code === 'not_declared'
+                || code === 'consent_required' || code === 'capability_disabled' || code === 'capability_removed') {
+          readOnly('편집 권한이 없는 링크다. 소유자에게 편집 권한을 요청하라.');
+        } else if (code === 'too_large') {
+          status('문서가 저장 한도를 넘었다. 내용을 줄인 뒤 다시 저장하라.', 'warn');
+        } else if (code === 'rate_limited') {
+          status('저장이 너무 잦다. 잠시 후 다시 시도하라.', 'warn');
+        } else {
+          status('저장하지 못했다 (' + code + '). 잠시 후 다시 시도하라.', 'warn');
+        }
+      });
+    }
+
+    /* ---------- 복원 배너 ---------- */
+
+    function offerRestore() {
+      var draft = null;
+      try { draft = sessionStorage.getItem(DRAFT_KEY); } catch (err) { return; }
+      if (!draft) return;
+      var b = document.createElement('div');
+      b.className = 'restorebar ed-ui';
+      var msg = document.createElement('span');
+      msg.textContent = '저장하지 못한 편집이 남아 있다.';
+      var yes = document.createElement('button');
+      yes.type = 'button'; yes.textContent = '복원';
+      var no = document.createElement('button');
+      no.type = 'button'; no.textContent = '버리기';
+      yes.addEventListener('click', function () {
+        wrap.innerHTML = draft;
+        scan(); renderChrome(); show(keyFromHash(), false);
+        try { sessionStorage.removeItem(DRAFT_KEY); } catch (err) { /* 무시 */ }
+        b.remove();
+        if (api) { startEdit(); }
+      });
+      no.addEventListener('click', function () {
+        try { sessionStorage.removeItem(DRAFT_KEY); } catch (err) { /* 무시 */ }
+        b.remove();
+      });
+      b.appendChild(msg); b.appendChild(yes); b.appendChild(no);
+      document.body.appendChild(b);
+    }
+
+    /* ---------- 시동 ---------- */
+
+    btnStart.addEventListener('click', startEdit);
+    btnSave.addEventListener('click', save);
+    btnCancel.addEventListener('click', cancelEdit);
+
+    document.addEventListener('keydown', function (e) {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 's' || e.key === 'S')) {
+        if (editing) { e.preventDefault(); save(); }
+      }
+      if (e.key === 'Escape' && editing) { cancelEdit(); }
+    });
+
+    scan();
+    renderChrome();
+    show(keyFromHash(), false);
+
+    if (window.claude && typeof window.claude.use === 'function') {
+      window.claude.use('artifact').then(function (ns) {
+        api = ns;
+        if (api) { btnStart.hidden = false; offerRestore(); }
+        else { readOnly(''); }
+      }, function () { readOnly(''); });
+    } else {
+      readOnly('');
+    }
+  })();
+</script>
+</body>
+</html>
