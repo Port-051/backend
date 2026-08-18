@@ -1,0 +1,25 @@
+name: 문서
+
+on:
+  pull_request:
+    paths:
+      - '**.md'
+      - '.github/scripts/check-md-links.py'
+      - '.github/workflows/docs.yml'
+  push:
+    branches: [main]
+    paths:
+      - '**.md'
+
+permissions:
+  contents: read
+
+jobs:
+  links:
+    name: links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 마크다운 상대 링크 검사
+        run: python3 .github/scripts/check-md-links.py
