@@ -159,4 +159,5 @@
 | `00-prd.md` (본 문서) | 왜 · 누구 · 언제 · 범위 |
 | `01-functional-spec-mvp.md` | 무엇을 만드는가 — 기능과 우선순위 |
 | `02-technical-spec-supplement.md` | 무엇이 깨지면 실패인가 — 분산 전제 · 불변식 · 측정 |
+| `03-data-model.md` | 데이터 모델 ERD — 불변식이 박히는 제약 |
 | `README.md` | 문제 정의 · 접근 · 단계별 검증 계획 |

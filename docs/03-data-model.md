@@ -1,0 +1,290 @@
+# 데이터 모델 — ERD
+
+## 문서 범위
+
+- 이 ERD는 **PostgreSQL만** 다룬다. Redis 자료구조는 포함하지 않는다(5장).
+- 각 테이블이 어느 문서에서 나왔는지 표기한다. **도출한 것과 명세에 있던 것을 구분한다.**
+- 불변식이 스키마의 어느 제약으로 박히는지 4장에 적는다. 그게 이 문서의 목적이다.
+
+> `02-technical-spec-supplement.md` 2장의 참조 스키마는 **검출에 필요한 최소 형태**다.
+> 실제로 서비스를 돌리려면 기능 명세(`01`)가 요구하는 테이블이 더 필요하며, 이 문서가 그것까지 채운다.
+
+## 1. 전체 ERD
+
+```mermaid
+erDiagram
+    app_user ||--o| riot_account : "1:1"
+    app_user ||--o{ user_sub_position : ""
+    app_user ||--o{ push_subscription : ""
+    app_user ||--o{ match_request : "신청"
+    app_user ||--o{ party_member : "참가"
+    app_user ||--o{ user_busy_interval : "점유"
+    app_user ||--o{ user_relation : "재회·차단"
+    app_user ||--o{ notification_job : "수신"
+
+    match_request ||--o{ request_sub_position : ""
+    match_request ||--o| party_member : "확정 시 1건"
+    match_request ||--o{ offer_participant : "제안마다"
+
+    match_offer ||--|{ offer_participant : "전원 동시"
+
+    party ||--|{ party_member : "정원만큼"
+    party ||--o{ seat_recruitment : "이탈 시"
+    party ||--o{ user_busy_interval : ""
+    party ||--o{ party_rating : "완료 후"
+    party ||--o{ notification_job : ""
+
+    seat_recruitment }o--o| match_request : "선착순 충원"
+
+    app_user {
+        bigint id PK
+        text discord_id UK "OAuth2 신원 — 01 1.1"
+        text nickname "초기값은 Discord 표시 이름"
+        text voice_mode "필수 가능 사용안함 — 01 1.4"
+        text purpose "플레이 목적"
+        text mood "플레이 분위기 — 매칭 조건 아님"
+        text primary_position "기본 주 포지션 — 01 2.4"
+        timestamptz created_at
+    }
+
+    user_sub_position {
+        bigint user_id PK "FK app_user"
+        text position PK "기본 부 포지션 다중값"
+    }
+
+    riot_account {
+        bigint user_id PK "FK app_user — 1:1"
+        text game_name "Riot ID 앞부분"
+        text tag_line "Riot ID 태그"
+        text puuid UK "account-v1 조회 결과"
+        text solo_tier "솔로 듀오 랭크"
+        text solo_division
+        int solo_lp
+        text flex_tier "자유 랭크"
+        text flex_division
+        int flex_lp
+        int wins
+        int losses
+        text link_status "정상 확인필요 조회실패 — 01 2.3"
+        timestamptz refreshed_at "마지막 갱신 시각"
+    }
+
+    push_subscription {
+        bigint id PK
+        bigint user_id FK
+        text endpoint UK "Web Push — 01 8.2"
+        text p256dh
+        text auth
+        timestamptz created_at
+        timestamptz revoked_at "410 Gone 감지 시"
+    }
+
+    match_request {
+        bigint id PK
+        bigint user_id FK
+        text kind "IMMEDIATE 또는 SCHEDULED"
+        text queue "솔로듀오 자유 일반"
+        int target_size "큐별 허용값만 — 01 3.4"
+        text status "대기중 제안됨 확정 취소됨 실패 이탈함"
+        timestamptz requested_at "결정적 FCFS의 1차 정렬키"
+        int play_minutes "예상 플레이시간 — INV-2의 전제"
+        int max_wait_minutes "즉시 매칭"
+        timestamptz window_start "예약 시작 가능 범위"
+        timestamptz window_end
+        text tier_snapshot "요청 생성 시점 고정 — 01 3.5"
+        timestamptz tier_snapshot_at "신선도 검증 대상"
+        text allowed_tier_min "허용 티어 범위"
+        text allowed_tier_max
+        text primary_position
+        text purpose
+        text voice_mode
+    }
+
+    request_sub_position {
+        bigint request_id PK "FK match_request"
+        text position PK "요청에 담긴 부 포지션"
+    }
+
+    match_offer {
+        bigint id PK
+        text queue
+        int target_size
+        text combo_hash "참가 요청 집합 해시 — 01 5.4"
+        timestamptz created_at "제한시간의 기준"
+        timestamptz expires_at
+        text status "대기 확정 거절 시간초과"
+    }
+
+    offer_participant {
+        bigint offer_id PK "FK match_offer"
+        bigint request_id PK "FK match_request"
+        bigint user_id FK
+        text position "배정 예정 포지션"
+        text response "PENDING ACCEPTED DECLINED TIMEOUT"
+        timestamptz responded_at "조건부 전이로 멱등 보장"
+    }
+
+    party {
+        bigint id PK
+        text queue
+        int target_size
+        timestamptz start_at "즉시는 확정 시각"
+        timestamptz end_at "start_at 더하기 play_minutes"
+        text status "CONFIRMED RECRUITING CANCELLED COMPLETED"
+        text purpose "합의된 목적 — 좌석 지원 자격 판정용"
+        boolean voice_party "음성 파티 여부"
+        timestamptz confirmed_at
+        timestamptz completed_at "이벤트 기반 — 01 7.6"
+    }
+
+    party_member {
+        bigint request_id PK "PK가 곧 INV-3"
+        bigint party_id FK
+        bigint user_id FK
+        text position "INV-4 부분 유니크 키"
+        timestamptz joined_at
+        timestamptz left_at "NULL이면 현재 참가 중"
+        text leave_reason "01 7.3"
+    }
+
+    seat_recruitment {
+        bigint id PK
+        bigint party_id FK
+        text position "좌석은 포지션 단위 — 01 7.4"
+        timestamptz opened_at
+        timestamptz deadline "예약은 시작 10분 전 즉시는 15분"
+        timestamptz closed_at
+        text status "OPEN FILLED EXPIRED"
+        bigint filled_by_request_id FK "충원된 요청"
+    }
+
+    user_busy_interval {
+        bigint user_id PK "FK app_user"
+        tstzrange during PK "배제 제약 대상 — INV-2"
+        bigint party_id FK
+    }
+
+    party_rating {
+        bigint party_id PK "FK party"
+        bigint rater_id PK "FK app_user"
+        bigint ratee_id PK "FK app_user"
+        text verdict "AGAIN 또는 NO — 01 7.7"
+        timestamptz rated_at
+    }
+
+    user_relation {
+        bigint user_id PK "FK app_user"
+        bigint other_id PK "FK app_user"
+        text kind "REUNION 또는 BLOCK"
+        timestamptz updated_at
+    }
+
+    notification_job {
+        bigint id PK
+        bigint party_id FK
+        bigint user_id FK
+        text kind "제안 확정 충원 취소 준비확인 리마인더 평가요청"
+        text channel "INAPP WEBPUSH DISCORD"
+        timestamptz fire_at
+        text status "SCHEDULED SENT CANCELLED FAILED"
+        text dedup_key UK "INV-5"
+        timestamptz sent_at
+    }
+```
+
+## 2. 엔터티 출처
+
+| 테이블 | 출처 | 역할 |
+|---|---|---|
+| `match_request` | **02 참조 스키마** | 매칭 요청. 티어 스냅샷을 들고 있다 |
+| `party` | **02 참조 스키마** | 확정된 파티 |
+| `party_member` | **02 참조 스키마** | 파티 참가자. INV-1·INV-3·INV-4가 전부 여기 걸린다 |
+| `user_busy_interval` | **02 참조 스키마** | INV-2를 DB 제약으로 막기 위한 전용 테이블 |
+| `party_rating` | **02 참조 스키마** | 1클릭 평가 |
+| `user_relation` | **02 참조 스키마** | 재회 목록과 차단 쌍 |
+| `notification_job` | **02 참조 스키마** | 알림 예약·발송 기록 |
+| `app_user` | 01 1.1·1.4에서 도출 | 계정과 프로필. 02는 `user_id`만 참조하고 정의는 없었다 |
+| `riot_account` | 01 2.1~2.3에서 도출 | Riot 조회 결과의 영속 사본 |
+| `user_sub_position` | 01 2.4에서 도출 | 부 포지션이 다중값이라 분리 |
+| `request_sub_position` | 01 2.4에서 도출 | 요청에 담긴 부 포지션. 프로필 값과 다를 수 있다 |
+| `push_subscription` | 01 8.2에서 도출 | Web Push 구독. 만료 감지 시 폐기 |
+| `match_offer` | 01 5장에서 도출 | 제안. **확정 전 단계라 `party`와 분리해야 한다** |
+| `offer_participant` | 01 5.2에서 도출 | 수락·거절 응답. 중복 클릭 멱등의 대상 |
+| `seat_recruitment` | 01 7.4·7.5에서 도출 | 빈자리 공개 모집. 마감 시각과 상태가 필요하다 |
+
+## 3. 관계에서 읽어야 할 것
+
+**`match_request` → `party_member`는 0 또는 1이다.**
+한 요청은 평생 최대 한 파티에만 속한다(01 6.2 — 이탈한 요청은 재대기하지 않는다).
+그래서 `party_member`의 기본키를 `request_id`로 잡았다. **PK 자체가 INV-3이다.**
+
+**`match_offer`는 `party`와 분리돼 있다.**
+제안이 실패하면 참가자는 다시 대기하는데(01 5.3), 제안 시점에 `party_member`를 만들면
+재대기 후 두 번째 행이 생겨 INV-3에 걸린다. 그래서 제안 참가자는 `offer_participant`에 담고,
+`party_member`는 **확정 시점에만** 만든다.
+
+**`match_request` → `offer_participant`는 1:N이다.**
+같은 요청이 여러 제안에 순차로 참여할 수 있다. 실패하고 다시 대기하기 때문이다.
+
+**`seat_recruitment` → `match_request`는 0 또는 1이다.**
+좌석 하나에 여러 명이 동시에 지원하지만 채워지는 건 하나뿐이다. 그 하나가 `filled_by_request_id`다.
+
+## 4. 불변식이 스키마에 박히는 자리
+
+| 불변식 | 스키마 구조 | 비고 |
+|---|---|---|
+| **INV-1** 정원 초과 | **없음** | 정원은 행이 아니라 집합의 크기다. 제약으로 못 막는다 |
+| **INV-2** 시간 겹침 중복 배정 | `user_busy_interval`의 `EXCLUDE USING gist (user_id WITH =, during WITH &&)` | 사용자와 구간이 한 행에 있어야 성립한다 |
+| **INV-3** 요청 단일 배정 | `party_member.request_id` **PK** | 배치가 구조적으로 멱등해진다 |
+| **INV-4** 포지션 중복 | `UNIQUE (party_id, position) WHERE left_at IS NULL` | 부분 인덱스라 이탈한 자리가 다시 열린다 |
+| **INV-5** 알림 중복 발송 | `notification_job.dedup_key` **UNIQUE** | 전송은 at-least-once, 차단은 기록 쪽에서 |
+
+```sql
+-- INV-2
+CREATE TABLE user_busy_interval (
+  user_id  BIGINT    NOT NULL,
+  during   TSTZRANGE NOT NULL,
+  party_id BIGINT    NOT NULL,
+  EXCLUDE USING gist (user_id WITH =, during WITH &&)
+);
+
+-- INV-3
+ALTER TABLE party_member ADD CONSTRAINT pk_member PRIMARY KEY (request_id);
+
+-- INV-4
+CREATE UNIQUE INDEX uq_member_position
+  ON party_member (party_id, position) WHERE left_at IS NULL;
+
+-- INV-5
+ALTER TABLE notification_job ADD CONSTRAINT uq_notif_dedup UNIQUE (dedup_key);
+
+-- 중복 평가 차단
+ALTER TABLE party_rating ADD CONSTRAINT pk_rating PRIMARY KEY (party_id, rater_id, ratee_id);
+```
+
+**다섯 중 넷은 제약으로 막히고 INV-1만 못 막는다.**
+그래서 좌석 경합이 이 프로젝트의 본체이고, M1·M2가 거기에 배정돼 있다.
+
+**`seat_recruitment`가 좌석 경합의 무대다.** 좌석 하나는 `uq_member_position`의 키 하나이며,
+동시 지원자 중 하나만 삽입에 성공한다. 그 제어를 어떻게 하느냐가 M2의 비교 대상이다.
+
+## 5. ERD에 없는 것 — Redis
+
+**권위 있는 상태만 ERD에 넣는다.** 다음은 Redis에 있고 테이블이 없다.
+
+| 대상 | 자료구조 | 근거 |
+|---|---|---|
+| 분산 락 | 문자열 + TTL | 배치 단일 실행. 락은 최적화이고 정합성은 제약이 보장한다 |
+| 제안 전파 | Pub/Sub | 인스턴스 간 팬아웃 |
+| 알림 지연 큐 | Sorted Set | score = 발송 예정 시각. 회수 가능해야 한다 |
+| Riot 조회 캐시 | 문자열 + TTL | 신선도 10분. **매칭은 이걸 읽지 않는다** — 요청의 스냅샷을 읽는다 |
+| 실패 조합 억제 | 문자열 + TTL 10분 | 01 5.4 — 영구 보관하지 않으므로 테이블로 두지 않는다 |
+
+Redis가 통째로 날아가도 위 다섯 불변식은 유지된다. 제약이 PostgreSQL에 있기 때문이다.
+
+## 6. 아직 정하지 않은 것
+
+- 인덱스 설계 — 결정적 FCFS의 정렬키 `(requested_at, id)`와 후보 필터 조건의 복합 인덱스는 M0에서 부하를 재며 정한다.
+- 파티션 — 예약 배치가 날짜 단위로 도는데 `match_request`를 날짜로 나눌지는 처리량 측정 후 결정한다.
+- `status` 컬럼들의 상태 기계 — 전이 규칙은 M0의 도메인 모델 작업에서 확정한다.
+- 보존 기간 — 완료된 파티와 발송된 알림을 언제 지울지. 전체 이용 내역은 남기지 않기로 했으므로(01 문서 범위) 정리 정책이 필요하다.
