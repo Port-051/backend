@@ -1,0 +1,76 @@
+name: PR 규약
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  convention:
+    name: convention
+    runs-on: ubuntu-latest
+    steps:
+      - name: PR 제목이 커밋 규약을 따르는가
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          echo "제목: $TITLE"
+
+          # Squash merge에서 PR 제목이 그대로 main의 커밋 메시지가 된다.
+          # 그래서 커밋 규약과 같은 형식을 요구한다. CONTRIBUTING.md 5·6절.
+          PATTERN='^(feat|fix|docs|refactor|test|chore|perf)(\((be|fe)\))?: .+'
+
+          if ! printf '%s' "$TITLE" | grep -qE "$PATTERN"; then
+            echo "::error::PR 제목이 커밋 규약을 따르지 않는다."
+            echo "형식: <타입>(<스코프>): <무엇을 했는가>"
+            echo "  타입   feat fix docs refactor test chore perf"
+            echo "  스코프 be fe — 공통이면 괄호째 생략한다"
+            echo "  예시   feat(be): 파티 매칭 API 추가"
+            echo "         docs: 데이터 모델 ERD 추가"
+            exit 1
+          fi
+
+          LEN=$(printf '%s' "$TITLE" | wc -m | tr -d ' ')
+          if [ "$LEN" -gt 72 ]; then
+            echo "::error::제목이 ${LEN}자다. 72자를 넘길 수 없다."
+            exit 1
+          elif [ "$LEN" -gt 50 ]; then
+            echo "::warning::제목이 ${LEN}자다. 규약은 50자 이내를 권한다."
+          fi
+
+          echo "통과 — ${LEN}자"
+
+      - name: 이슈 연결이 있는가
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          # 모든 작업은 이슈에서 시작한다. CONTRIBUTING.md 3절.
+          if ! printf '%s' "$BODY" | grep -qiE '(closes|fixes|resolves)[[:space:]]+#[0-9]+'; then
+            echo "::error::PR 본문에 이슈 연결이 없다. 'Closes #12' 형태로 적는다."
+            echo "이 줄이 있어야 머지 시 이슈가 닫히고, 나중에 이 코드가 왜 있는지 추적된다."
+            exit 1
+          fi
+
+          printf '%s' "$BODY" | grep -oiE '(closes|fixes|resolves)[[:space:]]+#[0-9]+' | while read -r line; do
+            echo "연결됨 — $line"
+          done
+
+      - name: 변경 규모가 상한 안인가
+        env:
+          ADDITIONS: ${{ github.event.pull_request.additions }}
+          DELETIONS: ${{ github.event.pull_request.deletions }}
+        run: |
+          TOTAL=$((ADDITIONS + DELETIONS))
+          echo "변경 ${TOTAL}줄 (+${ADDITIONS} -${DELETIONS})"
+
+          # 상한 초과는 경고로 둔다. 정적 자산·생성 파일처럼 쪼개도 리뷰 단위가
+          # 나뉘지 않는 경우가 있고, 그때는 PR 본문에 사유를 적는 것으로 갈음한다.
+          # CONTRIBUTING.md 6절.
+          if [ "$TOTAL" -gt 500 ]; then
+            echo "::warning::변경이 ${TOTAL}줄이다. 상한 500줄을 넘었다. 쪼갤 수 없다면 PR 본문에 사유를 적는다."
+          elif [ "$TOTAL" -gt 300 ]; then
+            echo "::notice::변경이 ${TOTAL}줄이다. 적정 300줄을 넘었으니 리뷰어에게 읽는 순서를 안내한다."
+          fi
