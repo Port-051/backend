@@ -37,3 +37,5 @@ dist/
 logs/
 *.log
 results/**/raw/
+.vercel
+.env*
