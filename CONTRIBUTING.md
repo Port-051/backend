@@ -97,9 +97,9 @@ Git Flow의 `develop`·`release/*`는 버전을 찍어 패키징 배포하던 �
 
 ```bash
 git switch main && git pull
-git switch -c feat/12-be-party-matching-api
+git switch -c feat/12-party-matching-api
 # 작업, 커밋
-git push -u origin feat/12-be-party-matching-api
+git push -u origin feat/12-party-matching-api
 gh pr create
 ```
 
@@ -121,28 +121,36 @@ gh pr create
 ## 4. 브랜치 이름
 
 ```
-<타입>/<이슈번호>-<스코프>-<영문-슬러그>
+<타입>/<이슈번호>-<영문-슬러그>
 ```
 
-**무슨 종류 / 몇 번 이슈 - 어디 - 뭘 하는지** 네 조각이다. 실제 브랜치를 뜯어보면 이렇다.
+**무슨 종류 / 몇 번 이슈 / 뭘 하는지** 세 조각이다. 실제 브랜치를 뜯어보면 이렇다.
 
 ```
-feat / 12 - be - party-matching-api
- │     │     │          │
- │     │     │          └ 슬러그     무슨 작업인가
- │     │     └ 스코프                어느 영역인가
- │     └ 이슈번호                    왜 하는가
- └ 타입                              무슨 종류인가
+feat / 12 - party-matching-api
+ │     │          │
+ │     │          └ 슬러그     무슨 작업인가
+ │     └ 이슈번호              왜 하는가
+ └ 타입                        무슨 종류인가
 
-docs / 9 - erd-architecture-sync     스코프 생략 — 문서라 BE/FE 구분이 없다
+docs / erd-architecture-sync   이슈 없이 시작한 작업 — 번호 조각을 생략한다
 ```
 
 | 조각 | 무엇을 적나 | 규칙 |
 |---|---|---|
 | 타입 | 작업의 종류 | 아래 7종 중 하나. **새로 만들지 않는다** |
 | 이슈번호 | 처리하는 이슈 | 숫자만. `#`는 붙이지 않는다. **이슈가 없으면 조각째 생략한다** |
-| 스코프 | 어느 영역인가 | `be` · `fe`. 모노레포라서 있는 조각이다. **걸치거나 공통이면 통째로 생략한다** |
 | 슬러그 | 무슨 작업인가 | 영문 소문자와 하이픈만 |
+
+### 스코프 조각은 지금 없다
+
+이전에는 `<이슈번호>`와 `<슬러그>` 사이에 `be` · `fe`를 넣었다. 모노레포라서 있던 조각이다.
+저장소를 나눈 뒤로 이 저장소의 모든 작업이 백엔드이므로 `be`는 항상 참이고 `fe`는 들어올 수 없다.
+**정보량이 0인 조각을 규약으로 강제하지 않는다.**
+
+모듈 이름(`core-api` · `common` 등)으로 되살리는 선택지가 있으나 아직 코드가 0줄이다.
+[`docs/04-tech-stack.md`](docs/04-tech-stack.md) 8장이 모듈을 단계별로 만들기로 했으므로,
+**0단계에서 모듈이 실제로 생기면 그때 이 절을 다시 연다.** 없는 것을 미리 규약에 박지 않는다.
 
 ### 타입 7종
 
@@ -150,13 +158,13 @@ docs / 9 - erd-architecture-sync     스코프 생략 — 문서라 BE/FE 구분
 
 | 타입 | 언제 쓰나 | 예시 |
 |---|---|---|
-| `feat` | 기능 추가 | `feat/12-be-party-matching-api` |
-| `fix` | 버그 수정 | `fix/15-fe-proposal-card-expiry` |
+| `feat` | 기능 추가 | `feat/12-party-matching-api` |
+| `fix` | 버그 수정 | `fix/15-proposal-expiry-boundary` |
 | `docs` | 문서만 | `docs/18-erd-update` |
-| `refactor` | 동작은 그대로, 구조만 개선 | `refactor/21-be-matching-service` |
-| `test` | 테스트만 | `test/24-be-seat-contention` |
+| `refactor` | 동작은 그대로, 구조만 개선 | `refactor/21-matching-service` |
+| `test` | 테스트만 | `test/24-seat-contention` |
 | `chore` | 빌드·설정·의존성 | `chore/27-github-actions` |
-| `perf` | 성능 개선 | `perf/30-be-candidate-query` |
+| `perf` | 성능 개선 | `perf/30-candidate-query` |
 
 ### 슬러그
 
@@ -176,14 +184,14 @@ docs / 9 - erd-architecture-sync     스코프 생략 — 문서라 BE/FE 구분
 **타입은 영어, 설명은 한국어.** 기존 히스토리와 동일하다.
 
 ```
-<타입>(<스코프>): <무엇을 했는가>
+<타입>: <무엇을 했는가>
 
 <왜 그렇게 했는가 — 필요할 때만>
 ```
 
 ```
-feat(be): 파티 매칭 API 추가
-fix(fe): 제안 카드 만료 표시 오류 수정
+feat: 파티 매칭 API 추가
+fix: 제안 카드 만료 표시 오류 수정
 docs: 데이터 모델 ERD 추가
 ```
 
@@ -192,10 +200,8 @@ docs: 데이터 모델 ERD 추가
 | 제목 길이 | 50자 이내 |
 | 제목 끝 | 마침표를 찍지 않는다 |
 | 타입 | 브랜치 타입과 동일한 7종 |
-| 스코프 | `be` · `fe` — 여러 영역에 걸치거나 공통이면 **괄호째 생략한다** |
+| 스코프 | **쓰지 않는다.** 4절과 같은 이유다 |
 | 본문 | **무엇**이 아니라 **왜**를 적는다. 무엇은 diff에 이미 있다 |
-
-스코프는 `git log --oneline | grep '(be)'` 하나로 내 백엔드 작업만 뽑을 수 있게 해준다.
 
 본문이 필요한 경우는 이렇다 — 대안을 버린 이유, 성능 트레이드오프, 임시 조치와 그 해소 조건.
 
@@ -225,7 +231,7 @@ fix: 예약 마감 경계 조건 수정
 커밋 메시지와 같은 형식을 쓴다. Squash merge 시 이 제목이 `main`의 커밋 메시지가 된다.
 
 ```
-feat(be): 파티 매칭 API 추가
+feat: 파티 매칭 API 추가
 ```
 
 ### 본문

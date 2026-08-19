@@ -261,26 +261,29 @@ H2로는 검증하려는 대상 자체가 없어진다.
 
 ## 7. 저장소 배치
 
-`CONTRIBUTING.md` 1절의 구조를 유지하되 `backend/` 안을 Gradle 서브프로젝트로 나눈다.
+[`CONTRIBUTING.md`](../CONTRIBUTING.md) 1절이 정한 대로 **이 저장소가 곧 backend다.**
+Gradle 서브프로젝트로 안을 나눈다.
 
 ```
-backend/
+backend/                        저장소 루트
 ├── settings.gradle.kts
 ├── gradle/libs.versions.toml   버전 카탈로그
 ├── common/                     도메인 모델 · 엔티티 · Flyway 마이그레이션
 ├── core-api/                   Core API. 인스턴스 2대로 띄우는 대상
-└── invariants/                 불변식 검출 SQL (3.2)
+├── invariants/                 불변식 검출 SQL (3.2)
+├── load-test/                  k6 스크립트 · 부하 프로파일 · 씨드 설정
+├── docs/                       설계 문서
+├── site/                       설계 문서 정적 사이트
+└── .github/
 ```
 
-k6 스크립트는 Java가 아니므로 `backend/` 밖에 둔다.
-
-```
-load-test/                      k6 스크립트 · 부하 프로파일 · 씨드 설정
-```
-
-- 검출 SQL을 `backend/` 안에 두는 이유는 Testcontainers 테스트가 같은 파일을 읽기 때문이다(3.2).
+- `load-test/`는 Gradle 서브프로젝트가 아니다. k6 스크립트는 JavaScript라 빌드에 참여하지 않는다.
+- 검출 SQL을 저장소 안에 두는 이유는 Testcontainers 테스트가 같은 파일을 읽기 때문이다(3.2).
 - 실행기 넷(즉시 매칭 서비스, 예약 매칭 Worker, Notification Worker, Discord Worker)은
   해당 단계에서 모듈로 추가한다. 지금 빈 모듈을 만들어 두지 않는다.
+
+> 모듈이 생기면 커밋·브랜치 이름의 **스코프 조각을 다시 열지** 검토한다.
+> 저장소 분리 뒤 `be`·`fe`가 의미를 잃어 지금은 비워 둔 상태다(`CONTRIBUTING.md` 4절).
 
 ---
 

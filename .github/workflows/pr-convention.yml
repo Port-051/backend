@@ -21,15 +21,15 @@ jobs:
 
           # Squash merge에서 PR 제목이 그대로 main의 커밋 메시지가 된다.
           # 그래서 커밋 규약과 같은 형식을 요구한다. CONTRIBUTING.md 5·6절.
-          PATTERN='^(feat|fix|docs|refactor|test|chore|perf)(\((be|fe)\))?: .+'
+          # 스코프 조각은 저장소 분리 뒤 없앴다. CONTRIBUTING.md 4절.
+          PATTERN='^(feat|fix|docs|refactor|test|chore|perf): .+'
 
           if ! printf '%s' "$TITLE" | grep -qE "$PATTERN"; then
             echo "::error::PR 제목이 커밋 규약을 따르지 않는다."
-            echo "형식: <타입>(<스코프>): <무엇을 했는가>"
-            echo "  타입   feat fix docs refactor test chore perf"
-            echo "  스코프 be fe — 공통이면 괄호째 생략한다"
-            echo "  예시   feat(be): 파티 매칭 API 추가"
-            echo "         docs: 데이터 모델 ERD 추가"
+            echo "형식: <타입>: <무엇을 했는가>"
+            echo "  타입 feat fix docs refactor test chore perf"
+            echo "  예시 feat: 파티 매칭 API 추가"
+            echo "       docs: 데이터 모델 ERD 추가"
             exit 1
           fi
 
