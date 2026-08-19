@@ -9,6 +9,14 @@
 > `02-technical-spec-supplement.md` 2장의 참조 스키마는 **검출에 필요한 최소 형태**다.
 > 실제로 서비스를 돌리려면 기능 명세(`01`)가 요구하는 테이블이 더 필요하며, 이 문서가 그것까지 채운다.
 
+**아키텍처 도면을 반영했다.** Core API 밖으로 나간 실행기는 넷이다 — 즉시 매칭 서비스, 예약 매칭 Worker,
+Notification Worker, Discord Worker. 나머지 기능은 전부 Core API가 처리한다.
+이 분해가 스키마에 남기는 것은 두 가지다.
+
+- Discord Worker가 확정 파티의 비공개 채널을 만든다 → **`party_discord_channel` 신설**
+- 두 워커가 SQS(`notification-events` · `discord-commands`)로 명령을 받는다. 두 큐 모두 **at-least-once**이므로
+  중복 소비를 받는 쪽 테이블의 유니크 제약이 막아야 한다
+
 ## 1. 전체 ERD
 
 ```mermaid
@@ -32,6 +40,7 @@ erDiagram
     party ||--o{ seat_recruitment : "이탈 시"
     party ||--o{ user_busy_interval : ""
     party ||--o{ party_rating : "완료 후"
+    party ||--o| party_discord_channel : "확정 후 1건"
     party ||--o{ notification_job : ""
 
     seat_recruitment }o--o| match_request : "선착순 충원"
@@ -39,6 +48,7 @@ erDiagram
     app_user {
         bigint id PK
         text discord_id UK "OAuth2 신원 — 01 1.1"
+        text display_name "남에게 보이는 이름 — 신원과 분리"
         text nickname "초기값은 Discord 표시 이름"
         text voice_mode "필수 가능 사용안함 — 01 1.4"
         text purpose "플레이 목적"
@@ -179,12 +189,21 @@ erDiagram
         timestamptz updated_at
     }
 
+    party_discord_channel {
+        bigint party_id PK "FK party — PK가 곧 명령 멱등키"
+        text guild_id "채널을 만들 대상 서버"
+        text channel_id UK "생성된 비공개 채널"
+        text status "REQUESTED CREATED DELETED FAILED"
+        timestamptz created_at
+        timestamptz deleted_at "파티 종료 후 삭제"
+    }
+
     notification_job {
         bigint id PK
         bigint party_id FK
         bigint user_id FK
         text kind "제안 확정 충원 취소 준비확인 리마인더 평가요청"
-        text channel "INAPP WEBPUSH DISCORD"
+        text channel "SSE WEBPUSH DISCORD"
         timestamptz fire_at
         text status "SCHEDULED SENT CANCELLED FAILED"
         text dedup_key UK "INV-5"
@@ -211,6 +230,7 @@ erDiagram
 | `match_offer` | 01 5장에서 도출 | 제안. **확정 전 단계라 `party`와 분리해야 한다** |
 | `offer_participant` | 01 5.2에서 도출 | 수락·거절 응답. 중복 클릭 멱등의 대상 |
 | `seat_recruitment` | 01 7.4·7.5에서 도출 | 빈자리 공개 모집. 마감 시각과 상태가 필요하다 |
+| `party_discord_channel` | **아키텍처 도면에서 도출** | Discord Worker가 만든 비공개 채널. PK가 명령 멱등키를 겸한다 |
 
 ## 3. 관계에서 읽어야 할 것
 
@@ -229,6 +249,12 @@ erDiagram
 **`seat_recruitment` → `match_request`는 0 또는 1이다.**
 좌석 하나에 여러 명이 동시에 지원하지만 채워지는 건 하나뿐이다. 그 하나가 `filled_by_request_id`다.
 
+**`party` → `party_discord_channel`은 0 또는 1이다.**
+파티당 채널은 최대 하나다. 그래서 기본키를 `party_id`로 잡았고, **그 PK가 곧 명령 멱등키다.**
+Discord Worker는 `discord-commands` 큐에서 `CREATE_DISCORD_ROOM`을 받는데, SQS는 at-least-once라
+같은 메시지가 두 번 올 수 있다. 채널을 만들기 전에 `party_id`로 먼저 삽입하면
+두 번째 소비는 삽입 단계에서 실패하고, **채널이 둘 생기지 않는다.**
+
 ## 4. 불변식이 스키마에 박히는 자리
 
 | 불변식 | 스키마 구조 | 비고 |
@@ -238,6 +264,7 @@ erDiagram
 | **INV-3** 요청 단일 배정 | `party_member.request_id` **PK** | 배치가 구조적으로 멱등해진다 |
 | **INV-4** 포지션 중복 | `UNIQUE (party_id, position) WHERE left_at IS NULL` | 부분 인덱스라 이탈한 자리가 다시 열린다 |
 | **INV-5** 알림 중복 발송 | `notification_job.dedup_key` **UNIQUE** | 전송은 at-least-once, 차단은 기록 쪽에서 |
+| (번호 없음) Discord 채널 중복 생성 | `party_discord_channel.party_id` **PK** | INV-5와 성격이 같다. 불변식 목록에 넣을지는 `02`에서 정한다 |
 
 ```sql
 -- INV-2
@@ -260,6 +287,10 @@ ALTER TABLE notification_job ADD CONSTRAINT uq_notif_dedup UNIQUE (dedup_key);
 
 -- 중복 평가 차단
 ALTER TABLE party_rating ADD CONSTRAINT pk_rating PRIMARY KEY (party_id, rater_id, ratee_id);
+
+-- CREATE_DISCORD_ROOM 중복 소비 차단
+ALTER TABLE party_discord_channel ADD CONSTRAINT pk_discord_channel PRIMARY KEY (party_id);
+ALTER TABLE party_discord_channel ADD CONSTRAINT uq_discord_channel UNIQUE (channel_id);
 ```
 
 **다섯 중 넷은 제약으로 막히고 INV-1만 못 막는다.**
@@ -268,19 +299,29 @@ ALTER TABLE party_rating ADD CONSTRAINT pk_rating PRIMARY KEY (party_id, rater_i
 **`seat_recruitment`가 좌석 경합의 무대다.** 좌석 하나는 `uq_member_position`의 키 하나이며,
 동시 지원자 중 하나만 삽입에 성공한다. 그 제어를 어떻게 하느냐가 M2의 비교 대상이다.
 
-## 5. ERD에 없는 것 — Redis
+## 5. ERD에 없는 것 — Redis와 SQS
 
 **권위 있는 상태만 ERD에 넣는다.** 다음은 Redis에 있고 테이블이 없다.
 
 | 대상 | 자료구조 | 근거 |
 |---|---|---|
 | 분산 락 | 문자열 + TTL | 배치 단일 실행. 락은 최적화이고 정합성은 제약이 보장한다 |
-| 제안 전파 | Pub/Sub | 인스턴스 간 팬아웃 |
-| 알림 지연 큐 | Sorted Set | score = 발송 예정 시각. 회수 가능해야 한다 |
+| 즉시 매칭 대기열 | List · Sorted Set + Lua | 후보 선점용 작업 큐다. **권위는 `match_request`에 있다** |
+| 제안 전파 | Pub/Sub | 즉시 매칭 서비스 → Core API 팬아웃. 상태가 아니라 신호다 |
 | Riot 조회 캐시 | 문자열 + TTL | 신선도 10분. **매칭은 이걸 읽지 않는다** — 요청의 스냅샷을 읽는다 |
 | 실패 조합 억제 | 문자열 + TTL 10분 | 01 5.4 — 영구 보관하지 않으므로 테이블로 두지 않는다 |
 
-Redis가 통째로 날아가도 위 다섯 불변식은 유지된다. 제약이 PostgreSQL에 있기 때문이다.
+**SQS 두 개도 테이블이 아니다.** 큐는 전달 수단이지 상태가 아니다.
+
+| 큐 | 소비자 | 중복 소비를 막는 자리 |
+|---|---|---|
+| `notification-events` | Notification Worker | `notification_job.dedup_key` UNIQUE |
+| `discord-commands` | Discord Worker | `party_discord_channel.party_id` PK |
+
+두 큐 모두 at-least-once에 재시도·DLQ가 붙어 있다. **중복 전달을 막으려 하지 않고, 중복 반영을 막는다.**
+발송 예정 시각은 `notification_job.fire_at`에 남으므로, 큐가 비어도 예약된 알림은 복원할 수 있다.
+
+Redis도 SQS도 통째로 날아가고 다시 채워져도 위 다섯 불변식은 유지된다. 제약이 PostgreSQL에 있기 때문이다.
 
 ## 6. 아직 정하지 않은 것
 
@@ -288,3 +329,6 @@ Redis가 통째로 날아가도 위 다섯 불변식은 유지된다. 제약이 
 - 파티션 — 예약 배치가 날짜 단위로 도는데 `match_request`를 날짜로 나눌지는 처리량 측정 후 결정한다.
 - `status` 컬럼들의 상태 기계 — 전이 규칙은 M0의 도메인 모델 작업에서 확정한다.
 - 보존 기간 — 완료된 파티와 발송된 알림을 언제 지울지. 전체 이용 내역은 남기지 않기로 했으므로(01 문서 범위) 정리 정책이 필요하다.
+- 리마인더의 지연 처리 — SQS의 `DelaySeconds`는 최대 15분이라 "시작 10분 전" 같은 장기 예약을 큐만으로는 못 건다. `fire_at`을 폴링할지 EventBridge Scheduler를 쓸지는 M6에서 정한다.
+- 즉시 매칭의 Lua 선점 — 아키텍처 도면은 선점 방식을 Lua로 적어 두었으나, 이는 README 2단계의 **비교 대상**(비관적 락 · 낙관적 락 · 파티션 단일 라이터)이다. M2 측정 전에는 확정으로 읽지 않는다.
+- `match_offer`의 점수 — 아키텍처에 "점수 계산"이 있으나 01은 일치도 점수를 제외 범위로 두었다. 점수를 영속할지 후보 선정 과정에만 쓸지 정해야 한다.

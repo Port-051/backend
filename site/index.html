@@ -459,6 +459,25 @@
   .dg-strokes i { display: block; width: 2rem; height: 0; border-top: 1.4px solid var(--rule-strong); }
   .dg-strokes i.evt { border-top: 1.4px dashed var(--accent); }
 
+  /* ---------- 상세 ERD ---------- */
+
+  .d-cf        { fill: none; stroke: var(--rule-strong); stroke-width: 1.3; stroke-linecap: round; }
+  .d-cf-key    { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; }
+  .d-erd-rule  { stroke: var(--rule); stroke-width: 1; fill: none; }
+  .d-erd-tbl   { fill: var(--accent-ink); font-family: var(--font-mono); font-size: 11.5px; font-weight: 700; letter-spacing: -.01em; }
+  .d-erd-tag   { fill: var(--ink-3); font-family: var(--font-mono); font-size: 8.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+  .d-erd-tag-hot { fill: var(--accent); font-family: var(--font-mono); font-size: 8.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+  .d-erd-col   { fill: var(--ink); font-family: var(--font-mono); font-size: 9.5px; }
+  .d-erd-note  { fill: var(--ink-3); font-family: var(--font-sans); font-size: 8.5px; }
+  .d-erd-kbg   { stroke-width: .8; }
+  .d-erd-key   { font-family: var(--font-mono); font-size: 7px; font-weight: 700; letter-spacing: .04em; }
+  .d-erd-kbg.k-pk  { fill: var(--accent-soft); stroke: color-mix(in srgb, var(--accent) 42%, transparent); }
+  .d-erd-key.k-pk  { fill: var(--accent-ink); }
+  .d-erd-kbg.k-fk  { fill: var(--surface); stroke: var(--rule-strong); }
+  .d-erd-key.k-fk  { fill: var(--ink-2); }
+  .d-erd-kbg.k-uk  { fill: var(--warn-soft); stroke: color-mix(in srgb, var(--warn) 42%, transparent); }
+  .d-erd-key.k-uk  { fill: var(--warn); }
+
   /* ---------- 엔터티 사전 ---------- */
 
   .d-wire-key { stroke: var(--accent); stroke-width: 1.6; fill: none; stroke-linecap: round; }
@@ -827,7 +846,7 @@
       </a>
       <a class="card" href="#/data">
         <span class="n">Doc 06</span><span class="t">데이터 모델</span>
-        <span class="d">테이블 15개와 불변식이 박히는 제약</span>
+        <span class="d">테이블 16개와 불변식이 박히는 제약</span>
       </a>
       <a class="card" href="#/milestones">
         <span class="n">Doc 07</span><span class="t">마일스톤</span>
@@ -870,7 +889,7 @@
           </tr>
           <tr>
             <td class="nowrap"><a href="https://github.com/Port-051/game-party-matcher/blob/main/docs/03-data-model.md">03 데이터 모델</a></td>
-            <td>테이블 15개 · 엔터티 출처 · 불변식이 스키마의 어느 제약으로 박히는지</td>
+            <td>테이블 16개 · 엔터티 출처 · 불변식이 스키마의 어느 제약으로 박히는지</td>
           </tr>
         </tbody>
       </table>
@@ -1765,7 +1784,7 @@
       <p class="eyebrow">Doc 06 · Data Model</p>
       <h1>데이터 모델</h1>
       <p class="standfirst">
-        테이블 열다섯 개. 목록이 목적은 아니다. 앞 문서의 불변식 다섯이
+        테이블 열여섯 개. 목록이 목적은 아니다. 앞 문서의 불변식 다섯이
         <strong>스키마의 어느 제약으로 박히는지</strong> 보이는 것이 이 문서의 일이다.
       </p>
     </div>
@@ -1794,11 +1813,11 @@
         <rect class="d-band-soft" x="20"  y="54" width="210" height="286" rx="10"/>
         <rect class="d-band-soft" x="270" y="54" width="220" height="286" rx="10"/>
         <rect class="d-band-soft" x="520" y="54" width="230" height="302" rx="10"/>
-        <rect class="d-band-soft" x="770" y="54" width="200" height="76"  rx="10"/>
+        <rect class="d-band-soft" x="770" y="54" width="200" height="136" rx="10"/>
         <text class="d-band-lbl" x="28"  y="46">사용자</text>
         <text class="d-band-lbl" x="278" y="46">요청 · 제안</text>
         <text class="d-band-lbl" x="528" y="46">파티</text>
-        <text class="d-band-lbl" x="778" y="46">알림</text>
+        <text class="d-band-lbl" x="778" y="46">연동 · 알림</text>
 
         <!-- 사용자 -->
         <g>
@@ -1893,11 +1912,18 @@
           <text class="d-sub"  x="552" y="343">완료 후 1클릭 평가</text>
         </g>
 
-        <!-- 알림 -->
+        <!-- 연동 · 알림 -->
         <g>
           <rect class="d-box-hot" x="790" y="74" width="170" height="36" rx="7"/>
           <text class="d-name" x="802" y="90">notification_job</text>
           <text class="d-sub"  x="802" y="103">INV-5 · dedup_key</text>
+        </g>
+        <path class="d-wire" d="M760 92 V152 H786"/>
+        <text class="d-elbl" x="758" y="146" text-anchor="end">확정 후 1개</text>
+        <g>
+          <rect class="d-box-hot" x="786" y="134" width="174" height="36" rx="7"/>
+          <text class="d-name" x="796" y="150" style="font-size:11.5px">party_discord_channel</text>
+          <text class="d-sub"  x="796" y="163">명령 멱등키 · 신규</text>
         </g>
 
         <!-- 교차 관계 -->
@@ -1922,8 +1948,8 @@
     <div class="dg-key">
       <div class="dg-key-row">
         <span class="b" style="background:var(--accent)"></span>
-        <p><span class="h">색이 채워진 셋</span> — 불변식이 <strong>DB 제약으로 박힌</strong> 테이블이다.
-        코드가 실수해도 데이터베이스가 거절한다.</p>
+        <p><span class="h">색이 채워진 넷</span> — 중복이 <strong>DB 제약으로 막히는</strong> 테이블이다.
+        코드가 실수해도, 배치가 두 번 돌아도, 큐가 같은 메시지를 두 번 줘도 데이터베이스가 거절한다.</p>
       </div>
       <div class="dg-key-row">
         <span class="b">!</span>
@@ -1936,6 +1962,424 @@
       <span><i></i> 소유 · 참조</span>
       <span><i style="border-top-color:var(--accent)"></i> 확정 경로 — INV-3이 걸리는 선</span>
     </div>
+
+    <div class="col">
+      <h2>상세 ERD</h2>
+      <p class="deck">
+        위 관계 지도가 <strong>무엇이 무엇을 소유하는가</strong>를 보여준다면, 이 도면은
+        <strong>그 관계가 어느 컬럼에 얹혀 있는가</strong>를 보여준다. 키와 판정에 쓰이는 컬럼만 남겼고,
+        나머지는 아래 엔터티 사전에 있다. 카디널리티는 까마귀발 표기를 따른다.
+      </p>
+    </div>
+
+    <div class="dg">
+      <svg viewBox="0 0 1670 750.5" role="img" style="min-width:1670px"
+           aria-label="party-matcher 상세 ERD. 사용자·요청과 제안·파티·연동과 알림 네 영역에 걸친 테이블 16개와 그 사이 관계를 까마귀발 표기로 그린 도면.">
+        <defs>
+          <marker id="cf-one" viewBox="0 0 14 12" refX="13" refY="6" markerWidth="14" markerHeight="12" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+            <path class="d-cf" d="M9 1.5 V10.5"/>
+          </marker>
+          <marker id="cf-oneone" viewBox="0 0 14 12" refX="13" refY="6" markerWidth="14" markerHeight="12" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+            <path class="d-cf" d="M11 1.5 V10.5 M6.5 1.5 V10.5"/>
+          </marker>
+          <marker id="cf-zeroone" viewBox="0 0 18 12" refX="17" refY="6" markerWidth="18" markerHeight="12" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+            <path class="d-cf" d="M13 1.5 V10.5"/>
+            <circle class="d-cf" cx="6" cy="6" r="3"/>
+          </marker>
+          <marker id="cf-many" viewBox="0 0 14 12" refX="13" refY="6" markerWidth="14" markerHeight="12" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+            <path class="d-cf" d="M4 6 L13 1 M4 6 L13 11 M4 6 H13"/>
+          </marker>
+          <marker id="cf-onemany" viewBox="0 0 18 12" refX="17" refY="6" markerWidth="18" markerHeight="12" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+            <path class="d-cf" d="M8 6 L17 1 M8 6 L17 11 M8 6 H17 M4 1.5 V10.5"/>
+          </marker>
+          <marker id="cf-zeromany" viewBox="0 0 20 12" refX="19" refY="6" markerWidth="20" markerHeight="12" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+            <path class="d-cf" d="M10 6 L19 1 M10 6 L19 11 M10 6 H19"/>
+            <circle class="d-cf" cx="4" cy="6" r="3"/>
+          </marker>
+          <marker id="cf-one-k" viewBox="0 0 14 12" refX="13" refY="6" markerWidth="14" markerHeight="12" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+            <path class="d-cf-key" d="M9 1.5 V10.5"/>
+          </marker>
+          <marker id="cf-oneone-k" viewBox="0 0 14 12" refX="13" refY="6" markerWidth="14" markerHeight="12" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+            <path class="d-cf-key" d="M11 1.5 V10.5 M6.5 1.5 V10.5"/>
+          </marker>
+          <marker id="cf-zeroone-k" viewBox="0 0 18 12" refX="17" refY="6" markerWidth="18" markerHeight="12" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+            <path class="d-cf-key" d="M13 1.5 V10.5"/>
+            <circle class="d-cf-key" cx="6" cy="6" r="3"/>
+          </marker>
+          <marker id="cf-many-k" viewBox="0 0 14 12" refX="13" refY="6" markerWidth="14" markerHeight="12" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+            <path class="d-cf-key" d="M4 6 L13 1 M4 6 L13 11 M4 6 H13"/>
+          </marker>
+          <marker id="cf-onemany-k" viewBox="0 0 18 12" refX="17" refY="6" markerWidth="18" markerHeight="12" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+            <path class="d-cf-key" d="M8 6 L17 1 M8 6 L17 11 M8 6 H17 M4 1.5 V10.5"/>
+          </marker>
+          <marker id="cf-zeromany-k" viewBox="0 0 20 12" refX="19" refY="6" markerWidth="20" markerHeight="12" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+            <path class="d-cf-key" d="M10 6 L19 1 M10 6 L19 11 M10 6 H19"/>
+            <circle class="d-cf-key" cx="4" cy="6" r="3"/>
+          </marker>
+        </defs>
+
+        <!-- 영역 -->
+        <rect class="d-band-soft" x="16" y="76" width="378" height="600.5" rx="10"/>
+        <text class="d-band-lbl" x="24" y="66">사용자</text>
+        <rect class="d-band-soft" x="436" y="76" width="378" height="540.5" rx="10"/>
+        <text class="d-band-lbl" x="444" y="66">요청 · 제안</text>
+        <rect class="d-band-soft" x="856" y="76" width="378" height="662.5" rx="10"/>
+        <text class="d-band-lbl" x="864" y="66">파티</text>
+        <rect class="d-band-soft" x="1276" y="76" width="378" height="327.5" rx="10"/>
+        <text class="d-band-lbl" x="1284" y="66">연동 · 알림</text>
+
+        <!-- 관계 -->
+        <path class="d-wire" d="M42 205.5 V620.25"/>
+        <path class="d-wire" d="M42 214.5 V206" marker-end="url(#cf-one)"/>
+        <path class="d-wire" d="M42 285.25 H56" marker-end="url(#cf-zeroone)"/>
+        <path class="d-wire" d="M42 399.5 H56" marker-end="url(#cf-zeromany)"/>
+        <path class="d-wire" d="M42 506 H56" marker-end="url(#cf-zeromany)"/>
+        <path class="d-wire" d="M42 620.25 H56" marker-end="url(#cf-zeromany)"/>
+        <path class="d-wire" d="M380 130 H450" marker-start="url(#cf-one)" marker-end="url(#cf-zeromany)"/>
+        <text class="d-elbl" x="415" y="122" text-anchor="middle">신청</text>
+        <path class="d-wire" d="M462 252 V308.5 H476" marker-start="url(#cf-one)" marker-end="url(#cf-zeromany)"/>
+        <path class="d-wire" d="M462 465 V544.75 H476" marker-start="url(#cf-one)" marker-end="url(#cf-onemany)"/>
+        <text class="d-elbl" x="524" y="538.75" text-anchor="start">전원 동시</text>
+        <path class="d-wire" d="M450 230 H426 V566.75 H476" marker-start="url(#cf-one)" marker-end="url(#cf-zeromany)"/>
+        <text class="d-elbl" x="419" y="398.375" text-anchor="middle" transform="rotate(-90 419 398.375)">제안마다</text>
+        <path class="d-wire-key" d="M800 164 C846 164, 844 285.25, 896 285.25" marker-start="url(#cf-one-k)" marker-end="url(#cf-zeroone-k)"/>
+        <text class="d-elbl" x="848" y="273.25" text-anchor="middle">확정 시 0..1</text>
+        <path class="d-wire" d="M1045 205.5 V227.5" marker-start="url(#cf-one)" marker-end="url(#cf-onemany)"/>
+        <text class="d-elbl" x="1053" y="220.5" text-anchor="start">정원만큼</text>
+        <path class="d-wire" d="M882 205.5 V674.5"/>
+        <path class="d-wire" d="M882 214.5 V206" marker-end="url(#cf-one)"/>
+        <path class="d-wire" d="M882 407.25 H896" marker-end="url(#cf-zeromany)"/>
+        <path class="d-wire" d="M882 537 H896" marker-end="url(#cf-zeromany)"/>
+        <path class="d-wire" d="M882 674.5 H896" marker-end="url(#cf-zeromany)"/>
+        <text class="d-elbl" x="878" y="531" text-anchor="end">이탈 시</text>
+        <path class="d-wire" d="M1220 120 H1290" marker-start="url(#cf-one)" marker-end="url(#cf-zeroone)"/>
+        <text class="d-elbl" x="1255" y="112" text-anchor="middle">확정 후 1개</text>
+        <path class="d-wire" d="M1220 164 C1254 164, 1256 308.5, 1290 308.5" marker-start="url(#cf-one)" marker-end="url(#cf-zeromany)"/>
+        <text class="d-elbl" x="1255" y="324.5" text-anchor="middle">발송 예약</text>
+        <path class="d-wire" d="M896 515.5 H848 V40 H610 V90" marker-start="url(#cf-zeromany)" marker-end="url(#cf-zeroone)"/>
+        <text class="d-elbl" x="618" y="33" text-anchor="start">선착순 충원 — filled_by_request_id</text>
+
+        <!-- 테이블 -->
+        <g>
+          <rect class="d-box" x="30" y="90" width="350" height="115.5" rx="8"/>
+          <path class="d-erd-rule" d="M30 116 H380"/>
+          <text class="d-erd-tbl" x="41" y="107.5">app_user</text>
+          <text class="d-erd-col" x="41" y="132">id</text>
+          <rect class="d-erd-kbg k-pk" x="168" y="123.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="176.5" y="131.6" text-anchor="middle">PK</text>
+          <text class="d-erd-col" x="41" y="147.5">discord_id</text>
+          <rect class="d-erd-kbg k-uk" x="168" y="139.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-uk" x="176.5" y="147.1" text-anchor="middle">UK</text>
+          <text class="d-erd-note" x="214" y="147.5">OAuth2 신원</text>
+          <text class="d-erd-col" x="41" y="163">display_name</text>
+          <text class="d-erd-note" x="214" y="163">남에게 보이는 이름</text>
+          <text class="d-erd-col" x="41" y="178.5">primary_position</text>
+          <text class="d-erd-note" x="214" y="178.5">기본 주 포지션</text>
+          <text class="d-erd-col" x="41" y="194">voice_mode</text>
+          <text class="d-erd-note" x="214" y="194">필수·가능·사용안함</text>
+        </g>
+        <g>
+          <rect class="d-box" x="56" y="227.5" width="324" height="115.5" rx="8"/>
+          <path class="d-erd-rule" d="M56 253.5 H380"/>
+          <text class="d-erd-tbl" x="67" y="245">riot_account</text>
+          <text class="d-erd-col" x="67" y="269.5">user_id</text>
+          <rect class="d-erd-kbg k-pk" x="194" y="261.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="202.5" y="269.1" text-anchor="middle">PK</text>
+          <rect class="d-erd-kbg k-fk" x="214" y="261.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="222.5" y="269.1" text-anchor="middle">FK</text>
+          <text class="d-erd-note" x="240" y="269.5">1:1</text>
+          <text class="d-erd-col" x="67" y="285">puuid</text>
+          <rect class="d-erd-kbg k-uk" x="194" y="276.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-uk" x="202.5" y="284.6" text-anchor="middle">UK</text>
+          <text class="d-erd-note" x="240" y="285">account-v1</text>
+          <text class="d-erd-col" x="67" y="300.5">solo_tier</text>
+          <text class="d-erd-note" x="240" y="300.5">· division · lp</text>
+          <text class="d-erd-col" x="67" y="316">link_status</text>
+          <text class="d-erd-note" x="240" y="316">정상·확인필요·조회실패</text>
+          <text class="d-erd-col" x="67" y="331.5">refreshed_at</text>
+          <text class="d-erd-note" x="240" y="331.5">마지막 갱신</text>
+        </g>
+        <g>
+          <rect class="d-box" x="56" y="365" width="324" height="69" rx="8"/>
+          <path class="d-erd-rule" d="M56 391 H380"/>
+          <text class="d-erd-tbl" x="67" y="382.5">user_sub_position</text>
+          <text class="d-erd-col" x="67" y="407">user_id</text>
+          <rect class="d-erd-kbg k-pk" x="194" y="398.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="202.5" y="406.6" text-anchor="middle">PK</text>
+          <rect class="d-erd-kbg k-fk" x="214" y="398.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="222.5" y="406.6" text-anchor="middle">FK</text>
+          <text class="d-erd-col" x="67" y="422.5">position</text>
+          <rect class="d-erd-kbg k-pk" x="194" y="414.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="202.5" y="422.1" text-anchor="middle">PK</text>
+          <text class="d-erd-note" x="240" y="422.5">부 포지션 다중값</text>
+        </g>
+        <g>
+          <rect class="d-box" x="56" y="456" width="324" height="100" rx="8"/>
+          <path class="d-erd-rule" d="M56 482 H380"/>
+          <text class="d-erd-tbl" x="67" y="473.5">push_subscription</text>
+          <text class="d-erd-col" x="67" y="498">id</text>
+          <rect class="d-erd-kbg k-pk" x="194" y="489.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="202.5" y="497.6" text-anchor="middle">PK</text>
+          <text class="d-erd-col" x="67" y="513.5">user_id</text>
+          <rect class="d-erd-kbg k-fk" x="194" y="505.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="202.5" y="513.1" text-anchor="middle">FK</text>
+          <text class="d-erd-col" x="67" y="529">endpoint</text>
+          <rect class="d-erd-kbg k-uk" x="194" y="520.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-uk" x="202.5" y="528.6" text-anchor="middle">UK</text>
+          <text class="d-erd-note" x="240" y="529">Web Push · FCM</text>
+          <text class="d-erd-col" x="67" y="544.5">revoked_at</text>
+          <text class="d-erd-note" x="240" y="544.5">410 Gone 감지 시</text>
+        </g>
+        <g>
+          <rect class="d-box" x="56" y="578" width="324" height="84.5" rx="8"/>
+          <path class="d-erd-rule" d="M56 604 H380"/>
+          <text class="d-erd-tbl" x="67" y="595.5">user_relation</text>
+          <text class="d-erd-col" x="67" y="620">user_id</text>
+          <rect class="d-erd-kbg k-pk" x="194" y="611.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="202.5" y="619.6" text-anchor="middle">PK</text>
+          <rect class="d-erd-kbg k-fk" x="214" y="611.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="222.5" y="619.6" text-anchor="middle">FK</text>
+          <text class="d-erd-col" x="67" y="635.5">other_id</text>
+          <rect class="d-erd-kbg k-pk" x="194" y="627.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="202.5" y="635.1" text-anchor="middle">PK</text>
+          <rect class="d-erd-kbg k-fk" x="214" y="627.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="222.5" y="635.1" text-anchor="middle">FK</text>
+          <text class="d-erd-col" x="67" y="651">kind</text>
+          <text class="d-erd-note" x="240" y="651">REUNION · BLOCK</text>
+        </g>
+        <g>
+          <rect class="d-box" x="450" y="90" width="350" height="162" rx="8"/>
+          <path class="d-erd-rule" d="M450 116 H800"/>
+          <text class="d-erd-tbl" x="461" y="107.5">match_request</text>
+          <text class="d-erd-col" x="461" y="132">id</text>
+          <rect class="d-erd-kbg k-pk" x="588" y="123.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="596.5" y="131.6" text-anchor="middle">PK</text>
+          <text class="d-erd-col" x="461" y="147.5">user_id</text>
+          <rect class="d-erd-kbg k-fk" x="588" y="139.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="596.5" y="147.1" text-anchor="middle">FK</text>
+          <text class="d-erd-col" x="461" y="163">kind</text>
+          <text class="d-erd-note" x="634" y="163">IMMEDIATE · SCHEDULED</text>
+          <text class="d-erd-col" x="461" y="178.5">status</text>
+          <text class="d-erd-note" x="634" y="178.5">대기·제안됨·확정·취소·실패</text>
+          <text class="d-erd-col" x="461" y="194">requested_at</text>
+          <text class="d-erd-note" x="634" y="194">FCFS 1차 정렬키</text>
+          <text class="d-erd-col" x="461" y="209.5">tier_snapshot</text>
+          <text class="d-erd-note" x="634" y="209.5">생성 시점 고정</text>
+          <text class="d-erd-col" x="461" y="225">window_start</text>
+          <text class="d-erd-note" x="634" y="225">· window_end — 예약 범위</text>
+          <text class="d-erd-col" x="461" y="240.5">play_minutes</text>
+          <text class="d-erd-note" x="634" y="240.5">INV-2 의 전제</text>
+        </g>
+        <g>
+          <rect class="d-box" x="476" y="274" width="324" height="69" rx="8"/>
+          <path class="d-erd-rule" d="M476 300 H800"/>
+          <text class="d-erd-tbl" x="487" y="291.5">request_sub_position</text>
+          <text class="d-erd-col" x="487" y="316">request_id</text>
+          <rect class="d-erd-kbg k-pk" x="614" y="307.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="622.5" y="315.6" text-anchor="middle">PK</text>
+          <rect class="d-erd-kbg k-fk" x="634" y="307.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="642.5" y="315.6" text-anchor="middle">FK</text>
+          <text class="d-erd-col" x="487" y="331.5">position</text>
+          <rect class="d-erd-kbg k-pk" x="614" y="323.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="622.5" y="331.1" text-anchor="middle">PK</text>
+          <text class="d-erd-note" x="660" y="331.5">요청에 담긴 부 포지션</text>
+        </g>
+        <g>
+          <rect class="d-box" x="450" y="365" width="350" height="100" rx="8"/>
+          <path class="d-erd-rule" d="M450 391 H800"/>
+          <text class="d-erd-tbl" x="461" y="382.5">match_offer</text>
+          <text class="d-erd-col" x="461" y="407">id</text>
+          <rect class="d-erd-kbg k-pk" x="588" y="398.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="596.5" y="406.6" text-anchor="middle">PK</text>
+          <text class="d-erd-col" x="461" y="422.5">combo_hash</text>
+          <text class="d-erd-note" x="634" y="422.5">실패 조합 억제 키</text>
+          <text class="d-erd-col" x="461" y="438">expires_at</text>
+          <text class="d-erd-note" x="634" y="438">제한시간</text>
+          <text class="d-erd-col" x="461" y="453.5">status</text>
+          <text class="d-erd-note" x="634" y="453.5">대기·확정·거절·시간초과</text>
+        </g>
+        <g>
+          <rect class="d-box" x="476" y="487" width="324" height="115.5" rx="8"/>
+          <path class="d-erd-rule" d="M476 513 H800"/>
+          <text class="d-erd-tbl" x="487" y="504.5">offer_participant</text>
+          <text class="d-erd-col" x="487" y="529">offer_id</text>
+          <rect class="d-erd-kbg k-pk" x="614" y="520.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="622.5" y="528.6" text-anchor="middle">PK</text>
+          <rect class="d-erd-kbg k-fk" x="634" y="520.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="642.5" y="528.6" text-anchor="middle">FK</text>
+          <text class="d-erd-col" x="487" y="544.5">request_id</text>
+          <rect class="d-erd-kbg k-pk" x="614" y="536.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="622.5" y="544.1" text-anchor="middle">PK</text>
+          <rect class="d-erd-kbg k-fk" x="634" y="536.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="642.5" y="544.1" text-anchor="middle">FK</text>
+          <text class="d-erd-col" x="487" y="560">user_id</text>
+          <rect class="d-erd-kbg k-fk" x="614" y="551.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="622.5" y="559.6" text-anchor="middle">FK</text>
+          <text class="d-erd-col" x="487" y="575.5">position</text>
+          <text class="d-erd-note" x="660" y="575.5">배정 예정 포지션</text>
+          <text class="d-erd-col" x="487" y="591">response</text>
+          <text class="d-erd-note" x="660" y="591">PENDING·ACCEPTED·DECLINED</text>
+        </g>
+        <g>
+          <rect class="d-box" x="870" y="90" width="350" height="115.5" rx="8"/>
+          <path class="d-erd-rule" d="M870 116 H1220"/>
+          <text class="d-erd-tbl" x="881" y="107.5">party</text>
+          <text class="d-erd-col" x="881" y="132">id</text>
+          <rect class="d-erd-kbg k-pk" x="1008" y="123.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="1016.5" y="131.6" text-anchor="middle">PK</text>
+          <text class="d-erd-col" x="881" y="147.5">status</text>
+          <text class="d-erd-note" x="1054" y="147.5">CONFIRMED·RECRUITING·COMPLETED</text>
+          <text class="d-erd-col" x="881" y="163">start_at</text>
+          <text class="d-erd-note" x="1054" y="163">· end_at — 점유 구간</text>
+          <text class="d-erd-col" x="881" y="178.5">voice_party</text>
+          <text class="d-erd-note" x="1054" y="178.5">음성 파티 여부</text>
+          <text class="d-erd-col" x="881" y="194">confirmed_at</text>
+          <text class="d-erd-note" x="1054" y="194">· completed_at</text>
+        </g>
+        <g>
+          <rect class="d-box-hot" x="896" y="227.5" width="324" height="115.5" rx="8"/>
+          <path class="d-erd-rule" d="M896 253.5 H1220"/>
+          <text class="d-erd-tbl" x="907" y="245">party_member</text>
+          <text class="d-erd-tag-hot" x="1209" y="245" text-anchor="end">INV-1 · 3 · 4</text>
+          <text class="d-erd-col" x="907" y="269.5">request_id</text>
+          <rect class="d-erd-kbg k-pk" x="1034" y="261.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="1042.5" y="269.1" text-anchor="middle">PK</text>
+          <text class="d-erd-note" x="1080" y="269.5">PK 가 곧 INV-3</text>
+          <text class="d-erd-col" x="907" y="285">party_id</text>
+          <rect class="d-erd-kbg k-fk" x="1034" y="276.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="1042.5" y="284.6" text-anchor="middle">FK</text>
+          <text class="d-erd-col" x="907" y="300.5">user_id</text>
+          <rect class="d-erd-kbg k-fk" x="1034" y="292.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="1042.5" y="300.1" text-anchor="middle">FK</text>
+          <text class="d-erd-col" x="907" y="316">position</text>
+          <text class="d-erd-note" x="1080" y="316">INV-4 부분 유니크 키</text>
+          <text class="d-erd-col" x="907" y="331.5">left_at</text>
+          <text class="d-erd-note" x="1080" y="331.5">NULL 이면 참가 중</text>
+        </g>
+        <g>
+          <rect class="d-box-hot" x="896" y="365" width="324" height="84.5" rx="8"/>
+          <path class="d-erd-rule" d="M896 391 H1220"/>
+          <text class="d-erd-tbl" x="907" y="382.5">user_busy_interval</text>
+          <text class="d-erd-tag-hot" x="1209" y="382.5" text-anchor="end">INV-2</text>
+          <text class="d-erd-col" x="907" y="407">user_id</text>
+          <rect class="d-erd-kbg k-fk" x="1034" y="398.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="1042.5" y="406.6" text-anchor="middle">FK</text>
+          <text class="d-erd-note" x="1080" y="407">배제 제약 좌변</text>
+          <text class="d-erd-col" x="907" y="422.5">during</text>
+          <text class="d-erd-note" x="1080" y="422.5">tstzrange — 배제 제약 우변</text>
+          <text class="d-erd-col" x="907" y="438">party_id</text>
+          <rect class="d-erd-kbg k-fk" x="1034" y="429.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="1042.5" y="437.6" text-anchor="middle">FK</text>
+        </g>
+        <g>
+          <rect class="d-box" x="896" y="471.5" width="324" height="131" rx="8"/>
+          <path class="d-erd-rule" d="M896 497.5 H1220"/>
+          <text class="d-erd-tbl" x="907" y="489">seat_recruitment</text>
+          <text class="d-erd-col" x="907" y="513.5">id</text>
+          <rect class="d-erd-kbg k-pk" x="1034" y="505.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="1042.5" y="513.1" text-anchor="middle">PK</text>
+          <text class="d-erd-col" x="907" y="529">party_id</text>
+          <rect class="d-erd-kbg k-fk" x="1034" y="520.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="1042.5" y="528.6" text-anchor="middle">FK</text>
+          <text class="d-erd-col" x="907" y="544.5">position</text>
+          <text class="d-erd-note" x="1080" y="544.5">좌석은 포지션 단위</text>
+          <text class="d-erd-col" x="907" y="560">deadline</text>
+          <text class="d-erd-note" x="1080" y="560">예약 10분 · 즉시 15분 전</text>
+          <text class="d-erd-col" x="907" y="575.5">status</text>
+          <text class="d-erd-note" x="1080" y="575.5">OPEN · FILLED · EXPIRED</text>
+          <text class="d-erd-col" x="907" y="591">filled_by_request_id</text>
+          <rect class="d-erd-kbg k-fk" x="1034" y="582.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="1042.5" y="590.6" text-anchor="middle">FK</text>
+          <text class="d-erd-note" x="1080" y="591">충원된 요청</text>
+        </g>
+        <g>
+          <rect class="d-box" x="896" y="624.5" width="324" height="100" rx="8"/>
+          <path class="d-erd-rule" d="M896 650.5 H1220"/>
+          <text class="d-erd-tbl" x="907" y="642">party_rating</text>
+          <text class="d-erd-col" x="907" y="666.5">party_id</text>
+          <rect class="d-erd-kbg k-pk" x="1034" y="658.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="1042.5" y="666.1" text-anchor="middle">PK</text>
+          <rect class="d-erd-kbg k-fk" x="1054" y="658.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="1062.5" y="666.1" text-anchor="middle">FK</text>
+          <text class="d-erd-col" x="907" y="682">rater_id</text>
+          <rect class="d-erd-kbg k-pk" x="1034" y="673.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="1042.5" y="681.6" text-anchor="middle">PK</text>
+          <rect class="d-erd-kbg k-fk" x="1054" y="673.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="1062.5" y="681.6" text-anchor="middle">FK</text>
+          <text class="d-erd-col" x="907" y="697.5">ratee_id</text>
+          <rect class="d-erd-kbg k-pk" x="1034" y="689.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="1042.5" y="697.1" text-anchor="middle">PK</text>
+          <rect class="d-erd-kbg k-fk" x="1054" y="689.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="1062.5" y="697.1" text-anchor="middle">FK</text>
+          <text class="d-erd-col" x="907" y="713">verdict</text>
+          <text class="d-erd-note" x="1080" y="713">AGAIN · NO</text>
+        </g>
+        <g>
+          <rect class="d-box-hot" x="1290" y="90" width="350" height="115.5" rx="8"/>
+          <path class="d-erd-rule" d="M1290 116 H1640"/>
+          <text class="d-erd-tbl" x="1301" y="107.5">party_discord_channel</text>
+          <text class="d-erd-tag-hot" x="1629" y="107.5" text-anchor="end">신규</text>
+          <text class="d-erd-col" x="1301" y="132">party_id</text>
+          <rect class="d-erd-kbg k-pk" x="1428" y="123.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="1436.5" y="131.6" text-anchor="middle">PK</text>
+          <rect class="d-erd-kbg k-fk" x="1448" y="123.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="1456.5" y="131.6" text-anchor="middle">FK</text>
+          <text class="d-erd-note" x="1474" y="132">PK 가 곧 명령 멱등키</text>
+          <text class="d-erd-col" x="1301" y="147.5">guild_id</text>
+          <text class="d-erd-note" x="1474" y="147.5">대상 서버</text>
+          <text class="d-erd-col" x="1301" y="163">channel_id</text>
+          <rect class="d-erd-kbg k-uk" x="1428" y="154.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-uk" x="1436.5" y="162.6" text-anchor="middle">UK</text>
+          <text class="d-erd-note" x="1474" y="163">생성된 비공개 채널</text>
+          <text class="d-erd-col" x="1301" y="178.5">status</text>
+          <text class="d-erd-note" x="1474" y="178.5">REQUESTED·CREATED·DELETED</text>
+          <text class="d-erd-col" x="1301" y="194">deleted_at</text>
+          <text class="d-erd-note" x="1474" y="194">파티 종료 후 삭제</text>
+        </g>
+        <g>
+          <rect class="d-box-hot" x="1290" y="227.5" width="350" height="162" rx="8"/>
+          <path class="d-erd-rule" d="M1290 253.5 H1640"/>
+          <text class="d-erd-tbl" x="1301" y="245">notification_job</text>
+          <text class="d-erd-tag-hot" x="1629" y="245" text-anchor="end">INV-5</text>
+          <text class="d-erd-col" x="1301" y="269.5">id</text>
+          <rect class="d-erd-kbg k-pk" x="1428" y="261.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-pk" x="1436.5" y="269.1" text-anchor="middle">PK</text>
+          <text class="d-erd-col" x="1301" y="285">party_id</text>
+          <rect class="d-erd-kbg k-fk" x="1428" y="276.8" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="1436.5" y="284.6" text-anchor="middle">FK</text>
+          <text class="d-erd-col" x="1301" y="300.5">user_id</text>
+          <rect class="d-erd-kbg k-fk" x="1428" y="292.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-fk" x="1436.5" y="300.1" text-anchor="middle">FK</text>
+          <text class="d-erd-col" x="1301" y="316">kind</text>
+          <text class="d-erd-note" x="1474" y="316">제안·확정·충원·리마인더·평가</text>
+          <text class="d-erd-col" x="1301" y="331.5">channel</text>
+          <text class="d-erd-note" x="1474" y="331.5">SSE · WEBPUSH · DISCORD</text>
+          <text class="d-erd-col" x="1301" y="347">fire_at</text>
+          <text class="d-erd-note" x="1474" y="347">발송 예정 시각</text>
+          <text class="d-erd-col" x="1301" y="362.5">dedup_key</text>
+          <rect class="d-erd-kbg k-uk" x="1428" y="354.3" width="17" height="10.5" rx="2.5"/>
+          <text class="d-erd-key k-uk" x="1436.5" y="362.1" text-anchor="middle">UK</text>
+          <text class="d-erd-note" x="1474" y="362.5">INV-5 가 박히는 자리</text>
+          <text class="d-erd-col" x="1301" y="378">status</text>
+          <text class="d-erd-note" x="1474" y="378">SCHEDULED·SENT·CANCELLED</text>
+        </g>
+        <circle class="d-badge" cx="1200" cy="484.5" r="9"/>
+        <text class="d-badge-t" x="1200" y="488" text-anchor="middle">!</text>
+      </svg>
+    </div>
+
+    <div class="dg-strokes">
+      <span><svg width="34" height="12" aria-hidden="true"><path class="d-wire" d="M2 6 H32"/><path class="d-cf" d="M24 2 V10"/></svg> 정확히 하나</span>
+      <span><svg width="34" height="12" aria-hidden="true"><path class="d-wire" d="M2 6 H32"/><path class="d-cf" d="M28 2 V10"/><circle class="d-cf" cx="21" cy="6" r="3"/></svg> 0 또는 1</span>
+      <span><svg width="34" height="12" aria-hidden="true"><path class="d-wire" d="M2 6 H32"/><path class="d-cf" d="M22 6 L32 1 M22 6 L32 11 M22 6 H32"/><path class="d-cf" d="M18 2 V10"/></svg> 1 이상</span>
+      <span><svg width="34" height="12" aria-hidden="true"><path class="d-wire" d="M2 6 H32"/><path class="d-cf" d="M22 6 L32 1 M22 6 L32 11 M22 6 H32"/><circle class="d-cf" cx="16" cy="6" r="3"/></svg> 0 이상</span>
+    </div>
+
+    <p class="dg-cap">
+      <code>user_id</code> 참조선은 그리지 않았다. <code>app_user</code>는 여덟 테이블에서 참조되므로
+      전부 그리면 도면이 읽히지 않는다. 각 상자 안의 <span class="kk fk">FK</span> 배지가 그 자리를 대신한다.
+      <strong>세로 순서는 소유 관계다</strong> — 들여쓴 상자는 바로 위 상자에 속한다.
+    </p>
 
     <div class="col">
       <h2>불변식이 박히는 자리</h2>
@@ -1970,6 +2414,13 @@
             <td class="id">INV-5</td>
             <td class="nowrap"><code>dedup_key</code> UNIQUE</td>
             <td>전송은 at-least-once로 두고, <strong>차단은 기록 쪽에서</strong> 한다</td>
+          </tr>
+          <tr>
+            <td class="id" style="color:var(--ink-3)">—</td>
+            <td class="nowrap"><code>party_discord_channel.party_id</code> PK</td>
+            <td>번호 붙은 불변식은 아니지만 성격이 INV-5와 같다.
+            <code>discord-commands</code> 큐가 <code>CREATE_DISCORD_ROOM</code>을 두 번 줘도
+            <strong>채널이 둘 생기지 않는다</strong></td>
           </tr>
         </tbody>
       </table>
@@ -2006,7 +2457,13 @@ ALTER TABLE notification_job
 
 <span class="kw">-- 중복 평가 차단</span>
 ALTER TABLE party_rating
-  ADD CONSTRAINT pk_rating PRIMARY KEY (party_id, rater_id, ratee_id);</pre>
+  ADD CONSTRAINT pk_rating PRIMARY KEY (party_id, rater_id, ratee_id);
+
+<span class="kw">-- CREATE_DISCORD_ROOM 중복 소비</span>
+ALTER TABLE party_discord_channel
+  ADD CONSTRAINT pk_discord_channel PRIMARY KEY (party_id);
+ALTER TABLE party_discord_channel
+  ADD CONSTRAINT uq_discord_channel UNIQUE (channel_id);</pre>
         </details>
       </div>
     </div>
@@ -2051,6 +2508,7 @@ ALTER TABLE party_rating
         <dl>
           <dt>id <span class="kk pk">PK</span></dt><dd>bigint</dd>
           <dt>discord_id <span class="kk uk">UK</span></dt><dd>OAuth2 신원</dd>
+          <dt>display_name</dt><dd>남에게 보이는 이름. <strong>신원과 분리한다</strong></dd>
           <dt>nickname</dt><dd>초기값은 Discord 표시 이름</dd>
           <dt>voice_mode</dt><dd>필수 · 가능 · 사용안함</dd>
           <dt>purpose</dt><dd>플레이 목적</dd>
@@ -2216,6 +2674,22 @@ ALTER TABLE party_rating
       </div>
     </div>
 
+    <div class="col"><h3>연동</h3></div>
+
+    <div class="ents">
+      <div class="ent key">
+        <h4>party_discord_channel <em>아키텍처에서 도출</em></h4>
+        <dl>
+          <dt>party_id <span class="kk pk">PK</span><span class="kk fk">FK</span></dt><dd>party. <strong>PK가 곧 명령 멱등키다</strong></dd>
+          <dt>guild_id</dt><dd>채널을 만들 대상 서버</dd>
+          <dt>channel_id <span class="kk uk">UK</span></dt><dd>생성된 비공개 채널</dd>
+          <dt>status</dt><dd>REQUESTED · CREATED · DELETED · FAILED</dd>
+          <dt>created_at</dt><dd>—</dd>
+          <dt>deleted_at</dt><dd>파티 종료 후 삭제 시각</dd>
+        </dl>
+      </div>
+    </div>
+
     <div class="col"><h3>알림</h3></div>
 
     <div class="ents">
@@ -2226,8 +2700,8 @@ ALTER TABLE party_rating
           <dt>party_id <span class="kk fk">FK</span></dt><dd>party</dd>
           <dt>user_id <span class="kk fk">FK</span></dt><dd>app_user</dd>
           <dt>kind</dt><dd>제안 · 확정 · 충원 · 취소 · 준비확인 · 리마인더 · 평가요청</dd>
-          <dt>channel</dt><dd>INAPP · WEBPUSH · DISCORD</dd>
-          <dt>fire_at</dt><dd>지연 큐의 score</dd>
+          <dt>channel</dt><dd>SSE · WEBPUSH · DISCORD</dd>
+          <dt>fire_at</dt><dd>발송 예정 시각. 이때가 되면 <code>notification-events</code>로 넣는다</dd>
           <dt>status</dt><dd>SCHEDULED · SENT · CANCELLED · FAILED</dd>
           <dt>dedup_key <span class="kk uk">UK</span></dt><dd><strong>INV-5</strong></dd>
           <dt>sent_at</dt><dd>—</dd>
@@ -2236,10 +2710,13 @@ ALTER TABLE party_rating
     </div>
 
     <div class="col">
-      <h2>여기 없는 것 — Redis</h2>
+      <h2>여기 없는 것 — Redis와 SQS</h2>
       <p class="deck">
         <strong>Redis가 통째로 날아가도 다섯 불변식은 유지된다.</strong> 제약이 PostgreSQL에 있기 때문이다.
         그래서 아래 다섯은 테이블을 만들지 않았다.
+        <code>notification-events</code>와 <code>discord-commands</code> 큐도 마찬가지다 —
+        큐는 <strong>전달 수단이지 상태가 아니며</strong>, 두 큐 모두 at-least-once라
+        중복 소비는 받는 쪽 테이블의 유니크 제약이 막는다.
       </p>
     </div>
 
@@ -2249,7 +2726,7 @@ ALTER TABLE party_rating
         <tbody>
           <tr><td class="nowrap">분산 락</td><td class="nowrap">문자열 + TTL</td><td>락은 최적화다. 정합성은 제약이 보장한다</td></tr>
           <tr><td class="nowrap">제안 전파</td><td class="nowrap">Pub/Sub</td><td>인스턴스 간 팬아웃. 상태가 아니라 신호다</td></tr>
-          <tr><td class="nowrap">알림 지연 큐</td><td class="nowrap">Sorted Set</td><td>score = 발송 예정 시각. 회수 가능해야 한다</td></tr>
+          <tr><td class="nowrap">즉시 매칭 대기열</td><td class="nowrap">List · Sorted Set + Lua</td><td>후보 선점용 작업 큐다. <strong>권위는 <code>match_request</code>에 있다</strong></td></tr>
           <tr><td class="nowrap">Riot 조회 캐시</td><td class="nowrap">문자열 + TTL</td><td><strong>매칭은 이걸 읽지 않는다</strong> — 요청의 스냅샷을 읽는다</td></tr>
           <tr><td class="nowrap">실패 조합 억제</td><td class="nowrap">문자열 + TTL 10분</td><td>영구 보관하지 않으므로 테이블로 두지 않는다</td></tr>
         </tbody>
