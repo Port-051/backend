@@ -47,11 +47,11 @@ jobs:
         env:
           BODY: ${{ github.event.pull_request.body }}
         run: |
-          # 모든 작업은 이슈에서 시작한다. CONTRIBUTING.md 3절.
+          # 이슈는 원칙이되 강제가 아니다. CONTRIBUTING.md 3절.
           #
-          # 규약은 그대로 두되 CI는 막지 않는다. 오타 하나를 고치는 PR까지 이슈를
-          # 강제하면 이슈가 사후 정당화용으로 찍히고, 그러면 이슈가 "하려는 일"이
-          # 아니게 된다. 이슈 연결이 실제로 필요한지는 리뷰어가 판단한다.
+          # 이 경고가 잡으려는 것은 "이슈를 안 만든 PR"이 아니라 "이슈를 만들어놓고
+          # 연결을 빠뜨린 PR"이다. 연결이 없으면 머지돼도 이슈가 닫히지 않아
+          # 남은 일 목록이 틀어진다.
           if ! printf '%s' "$BODY" | grep -qiE '(closes|fixes|resolves)[[:space:]]+#[0-9]+'; then
             echo "::warning::PR 본문에 이슈 연결이 없다. 'Closes #12' 형태로 적는 것을 권한다."
             echo "이 줄이 있어야 머지 시 이슈가 닫히고, 나중에 이 코드가 왜 있는지 추적된다."
