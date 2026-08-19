@@ -13,7 +13,7 @@
 Notification Worker, Discord Worker. 나머지 기능은 전부 Core API가 처리한다.
 이 분해가 스키마에 남기는 것은 두 가지다.
 
-- Discord Worker가 확정 파티의 비공개 채널을 만든다 → **`party_discord_channel` 신설**
+- Discord Worker가 확정 파티의 비공개 채널을 만든다(01 7.9) → **`party_discord_channel` 신설**
 - 두 워커가 SQS(`notification-events` · `discord-commands`)로 명령을 받는다. 두 큐 모두 **at-least-once**이므로
   중복 소비를 받는 쪽 테이블의 유니크 제약이 막아야 한다
 
@@ -41,6 +41,8 @@ erDiagram
     party ||--o{ user_busy_interval : ""
     party ||--o{ party_rating : "완료 후"
     party ||--o| party_discord_channel : "확정 후 1건"
+    party_discord_channel ||--o{ party_discord_member : "참가자 투입"
+    app_user ||--o{ party_discord_member : ""
     party ||--o{ notification_job : ""
 
     seat_recruitment }o--o| match_request : "선착순 충원"
@@ -193,9 +195,19 @@ erDiagram
         bigint party_id PK "FK party — PK가 곧 명령 멱등키"
         text guild_id "채널을 만들 대상 서버"
         text channel_id UK "생성된 비공개 채널"
-        text status "REQUESTED CREATED DELETED FAILED"
+        text status "REQUESTED CREATED SKIPPED DELETED FAILED"
+        text fail_reason "권한부족 서버미가입 Discord장애 — 01 9.1"
         timestamptz created_at
-        timestamptz deleted_at "파티 종료 후 삭제"
+        timestamptz delete_after "삭제 예정 시각 — 01 10.5"
+        timestamptz deleted_at "실제 삭제 시각"
+    }
+
+    party_discord_member {
+        bigint party_id PK "FK party_discord_channel — 중복 투입 차단"
+        bigint user_id PK "FK app_user"
+        text status "PENDING JOINED SKIPPED REMOVED FAILED"
+        timestamptz joined_at "채널에 넣은 시각"
+        timestamptz removed_at "이탈로 내보낸 시각 — 01 7.3"
     }
 
     notification_job {
@@ -230,7 +242,8 @@ erDiagram
 | `match_offer` | 01 5장에서 도출 | 제안. **확정 전 단계라 `party`와 분리해야 한다** |
 | `offer_participant` | 01 5.2에서 도출 | 수락·거절 응답. 중복 클릭 멱등의 대상 |
 | `seat_recruitment` | 01 7.4·7.5에서 도출 | 빈자리 공개 모집. 마감 시각과 상태가 필요하다 |
-| `party_discord_channel` | **아키텍처 도면에서 도출** | Discord Worker가 만든 비공개 채널. PK가 명령 멱등키를 겸한다 |
+| `party_discord_channel` | 01 7.9·10.5에서 도출 | 확정 파티의 전용방. PK가 명령 멱등키를 겸한다 |
+| `party_discord_member` | 01 7.9에서 도출 | 채널에 넣은 참가자. 채널은 파티당 하나지만 **권한은 사람당**이다 |
 
 ## 3. 관계에서 읽어야 할 것
 
@@ -250,10 +263,18 @@ erDiagram
 좌석 하나에 여러 명이 동시에 지원하지만 채워지는 건 하나뿐이다. 그 하나가 `filled_by_request_id`다.
 
 **`party` → `party_discord_channel`은 0 또는 1이다.**
+0은 실패가 아니라 **정상 경로다.** 서버 가입은 파티 확정의 전제 조건이 아니므로(01 7.9)
+만들 대상이 없으면 만들지 않고 `SKIPPED`로 남긴다. 파티는 그대로 성립한다.
 파티당 채널은 최대 하나다. 그래서 기본키를 `party_id`로 잡았고, **그 PK가 곧 명령 멱등키다.**
 Discord Worker는 `discord-commands` 큐에서 `CREATE_DISCORD_ROOM`을 받는데, SQS는 at-least-once라
 같은 메시지가 두 번 올 수 있다. 채널을 만들기 전에 `party_id`로 먼저 삽입하면
 두 번째 소비는 삽입 단계에서 실패하고, **채널이 둘 생기지 않는다.**
+
+**`party_discord_channel` → `party_discord_member`는 1:N이다.**
+확정 시 참가자 전원을 채널에 넣고(01 7.9), 좌석이 충원되면 행이 하나 늘고 이탈하면 내보낸다.
+채널 생성과 참가자 투입은 **성공·실패 단위가 다르다.** 채널은 만들어졌는데 한 명만 못 들어간 상태가
+정상적으로 발생하므로(서버 미가입), 상태를 채널 한 행에 뭉쳐 둘 수 없다.
+`(party_id, user_id)` PK가 **투입 명령의 멱등키**를 겸해서, 중복 소비가 같은 사람을 두 번 넣지 못한다.
 
 ## 4. 불변식이 스키마에 박히는 자리
 
@@ -265,6 +286,7 @@ Discord Worker는 `discord-commands` 큐에서 `CREATE_DISCORD_ROOM`을 받는�
 | **INV-4** 포지션 중복 | `UNIQUE (party_id, position) WHERE left_at IS NULL` | 부분 인덱스라 이탈한 자리가 다시 열린다 |
 | **INV-5** 알림 중복 발송 | `notification_job.dedup_key` **UNIQUE** | 전송은 at-least-once, 차단은 기록 쪽에서 |
 | (번호 없음) Discord 채널 중복 생성 | `party_discord_channel.party_id` **PK** | INV-5와 성격이 같다. 불변식 목록에 넣을지는 `02`에서 정한다 |
+| (번호 없음) 참가자 중복 투입 | `party_discord_member` **PK (party_id, user_id)** | 위와 같은 성격. 투입 명령의 멱등키다 |
 
 ```sql
 -- INV-2
@@ -291,6 +313,10 @@ ALTER TABLE party_rating ADD CONSTRAINT pk_rating PRIMARY KEY (party_id, rater_i
 -- CREATE_DISCORD_ROOM 중복 소비 차단
 ALTER TABLE party_discord_channel ADD CONSTRAINT pk_discord_channel PRIMARY KEY (party_id);
 ALTER TABLE party_discord_channel ADD CONSTRAINT uq_discord_channel UNIQUE (channel_id);
+
+-- 참가자 중복 투입 차단
+ALTER TABLE party_discord_member
+  ADD CONSTRAINT pk_discord_member PRIMARY KEY (party_id, user_id);
 ```
 
 **다섯 중 넷은 제약으로 막히고 INV-1만 못 막는다.**
@@ -316,7 +342,7 @@ ALTER TABLE party_discord_channel ADD CONSTRAINT uq_discord_channel UNIQUE (chan
 | 큐 | 소비자 | 중복 소비를 막는 자리 |
 |---|---|---|
 | `notification-events` | Notification Worker | `notification_job.dedup_key` UNIQUE |
-| `discord-commands` | Discord Worker | `party_discord_channel.party_id` PK |
+| `discord-commands` | Discord Worker | `party_discord_channel.party_id` PK · `party_discord_member` PK |
 
 두 큐 모두 at-least-once에 재시도·DLQ가 붙어 있다. **중복 전달을 막으려 하지 않고, 중복 반영을 막는다.**
 발송 예정 시각은 `notification_job.fire_at`에 남으므로, 큐가 비어도 예약된 알림은 복원할 수 있다.
