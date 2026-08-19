@@ -32,7 +32,8 @@
 | 로컬 실행 | **Docker Compose**, 테스트는 **Testcontainers** | 인스턴스 2대가 측정 전제다 |
 | 부하 발생 | **k6** | 4장 |
 | 관측 | Actuator·Micrometer → Prometheus·Grafana | 계측과 시각화를 분리한다. 5장 |
-| 프론트엔드 | **미정** | 9.1 |
+| 프론트엔드 | **React · PWA + 모바일 앱** | 클라이언트 형태는 확정. 세부는 9.1 |
+| 배포 | **AWS** — ECS Fargate · S3 + CloudFront | 11장 |
 
 ---
 
@@ -310,12 +311,19 @@ backend/                        저장소 루트
 
 ### 9.1 프론트엔드
 
-**미정이다.** 0단계 과제(도메인 모델·상태 기계·부하 발생기·위반 검출기)에 프론트엔드가 필요하지 않고,
-API 계약이 아직 흔들린다.
+**클라이언트 형태와 배포 경로는 정해졌다** — 웹(React · PWA)과 모바일 앱, S3 + CloudFront(11장).
+남은 것은 그 안이다.
+
+| 미정 | 내용 |
+|---|---|
+| 모바일 앱 스택 | 웹뷰 · React Native · 네이티브 중 무엇인지 |
+| 상태 관리 · 빌드 도구 | 화면이 붙을 때 정한다 |
+| SSE 수신과 Web Push 처리 위치 | 웹과 모바일에서 경로가 갈린다 |
 
 **정하는 시점** — Core API가 제안 전달까지 동작해서 붙일 화면이 의미를 갖는 때. 로드맵상 5단계 전후다.
-그때 판단할 것은 SSE 수신과 Web Push(VAPID)를 어디서 처리하는가이며,
-`site/`가 이미 Vercel에 배포 중이므로 배포 경로 분리도 같이 정한다.
+0단계 과제(도메인 모델 · 상태 기계 · 부하 발생기 · 위반 검출기)에는 프론트엔드가 필요하지 않다.
+
+설계 문서 사이트(`site/`)는 이 결정과 무관하게 Vercel에 남는다. 서비스 프론트엔드와 다른 물건이다.
 
 ### 9.2 알림 지연 처리
 
@@ -344,3 +352,65 @@ ERD가 짚었듯 아키텍처 도면의 Lua 선점은 README 2단계의 **비교
 | 멀티모듈 | 실행기 분리가 과하다고 판명되면 프로필 기반 단일 모듈로 되돌린다 |
 
 > 이 표에 없는 이유로 스택을 바꾸려면 그 이유를 여기 먼저 추가한다.
+
+---
+
+## 11. 배포 — AWS MVP 구성
+
+아키텍처 도면을 문서로 옮긴 것이다. **도면이 원본이고 이 절이 사본이므로, 어긋나면 도면을 먼저 고친다.**
+
+### 11.1 계층
+
+| 계층 | 구성 |
+|---|---|
+| 클라이언트 | 웹(React · PWA), 모바일 앱. 둘 다 `/api`와 `/events`(SSE)를 쓴다 |
+| 엣지 | Route 53(DNS) → CloudFront → S3(웹 정적 콘텐츠) |
+| 네트워크 | VPC · 가용 영역 2개 |
+| Public Subnets | ALB(`/api` · `/events`, SSE 연결 유지), NAT Gateway(AZ별 배치) |
+| App Private Subnets | ECS 클러스터 — 실행기 다섯 |
+| Data Private Subnets | RDS PostgreSQL(Multi-AZ), ElastiCache for Redis |
+| 비동기 | SQS 두 개(`notification-events`, `discord-commands`), EventBridge |
+| 운영 | CloudWatch(로그 · 지표 · 알람), Secrets Manager(외부 API 키) |
+| 외부 | FCM(Web Push), Discord API |
+
+가용 영역 2개는 README의 **인스턴스 2대 전제**와 짝이다. 한 대로는 1·2번 문제가 재현되지 않는다.
+
+**Riot API는 도면에 없지만 Core API가 호출한다.** 별도 실행기가 아니라 Core 안에 접혀 있어서
+그림에 그려지지 않았을 뿐이고, 티어 조회는 서비스의 전제다(01 2장).
+
+### 11.2 실행기와 실행 형태
+
+| 실행기 | 형태 | 하는 일 |
+|---|---|---|
+| Core API + SSE | Fargate Service | 신청 · 취소, 수락/거절 집계, 파티 확정, SSE 연결 유지 |
+| 즉시 매칭 | Fargate Service | Redis 대기열 등록, 후보 조회, 점수 계산, 좌석 선점 |
+| Notification Worker | Fargate Service | `notification-events` 전용 소비 → FCM · Web Push |
+| Discord Worker | Fargate Service | `discord-commands` 전용 소비 → 전용방 채널 생성 · 삭제 |
+| 예약 매칭 | RunTask | 당일 예약 일괄 매칭. EventBridge가 매일 00:00 KST에 실행 |
+
+예약 매칭만 상시 서비스가 아니다. 하루 한 번 도는 배치라 Service로 띄울 이유가 없다.
+
+### 11.3 연결 규칙
+
+| 종류 | 경로 |
+|---|---|
+| 동기 | 클라이언트 → ALB → Core API. 외부 API 호출은 NAT Gateway를 지난다 |
+| 비동기 | SQS 두 개, Redis Pub/Sub |
+| Redis Pub/Sub | **제안 전달만.** 즉시 매칭이 `MATCH_PROPOSAL_CREATED`를 발행하고 Core API가 구독해 SSE로 내보낸다 |
+| Core 내부 이벤트 | Redis를 거치지 않고 해당 SSE 연결로 직접 보낸다 |
+
+`discord-commands`는 **전원 수락 후에만** 발행한다. 제안 단계에서 채널을 만들면 거절된 조합의 방이 남는다.
+두 큐 모두 재시도와 DLQ가 붙고, **중복 전달을 막지 않는다** — 중복 *반영*을 막는 자리는 ERD 5장에 있다.
+
+### 11.4 확정으로 읽지 않을 것
+
+도면에 그려져 있다는 이유로 결정된 것처럼 읽으면 안 되는 항목이다.
+
+| 항목 | 이유 |
+|---|---|
+| 즉시 매칭의 Lua 선점 | README 2단계의 **비교 대상**이다. 9.3 |
+| 알림 지연 방식 | 도면의 EventBridge는 **예약 배치 트리거**다. 알림 지연은 9.2에서 따로 정한다 |
+| 빈자리 충원 실행기 | 도면에 없다. 정원 초과(INV-1)가 나는 유일한 경로라 위치를 정해야 한다 |
+| 신원 식별 방식 | 도면은 `익명 식별`, README·01·02는 `Discord 계정`으로 적고 있다. **INV-2가 여기 걸린다** |
+| Discord 로그인의 용도 | 전용방 초대용이라는 것이 현재 결정이다. 위 문서들은 아직 신원 확인으로 적고 있어 정리가 필요하다 |
+| Core 내부 이벤트 직접 전달 | 인스턴스 2대 전제에서 다른 인스턴스에 붙은 참가자에게 닿는지 확인이 필요하다 |
