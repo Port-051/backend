@@ -1,15 +1,12 @@
 name: 문서
 
+# paths 필터를 걸지 않는다. 필수 검사(required status check)는 "성공"을 기다리고
+# "실행되지 않음"을 통과로 치지 않는다. 필터가 있으면 .md를 건드리지 않은 PR이
+# 영원히 대기 중으로 잠긴다. 검사 자체가 몇 초라 항상 돌리는 편이 싸다.
 on:
   pull_request:
-    paths:
-      - '**.md'
-      - '.github/scripts/check-md-links.py'
-      - '.github/workflows/docs.yml'
   push:
     branches: [main]
-    paths:
-      - '**.md'
 
 permissions:
   contents: read
