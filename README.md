@@ -161,3 +161,4 @@ App × 2  ─┬─  RDB
 - [기술 보완 명세](docs/02-technical-spec-supplement.md) — 분산 전제, 불변식, 실시간 전달, 알림, 측정 목표
 - [데이터 모델 (ERD)](docs/03-data-model.md) — 테이블 15개와 불변식이 박히는 제약
 - [기여 규약](CONTRIBUTING.md) — 브랜치 전략, 커밋·PR·리뷰 규칙
+- [CI/CD](docs/ci-cd.md) — 자동 검사, 머지 게이트, 배포
