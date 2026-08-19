@@ -73,11 +73,24 @@ Git Flow의 `develop`·`release/*`는 버전을 찍어 패키징 배포하던 �
 
 ```bash
 git switch main && git pull
-git switch -c feat/12-party-matching-api
+git switch -c feat/12-be-party-matching-api
 # 작업, 커밋
-git push -u origin feat/12-party-matching-api
+git push -u origin feat/12-be-party-matching-api
 gh pr create
 ```
+
+### 이슈와 PR은 무엇이 다른가
+
+| | 이슈 | PR |
+|---|---|---|
+| 뜻 | **하려는 일** | **해놓은 일** — 이 브랜치를 `main`에 합쳐달라는 요청 |
+| 코드 변경 | 없다 | 있다. 브랜치가 붙어 있다 |
+| 만드는 시점 | 작업 **전** | 작업 **후** |
+| 리뷰 | 없다 | 승인 1명이 필요하다 |
+| 닫는 법 | PR 본문의 `Closes #N`이 머지될 때 자동으로 닫는다 | 머지하거나 닫는다 |
+
+**둘은 번호를 한 줄로 같이 센다.** 이슈 #1을 만든 뒤 PR을 올리면 그 PR은 #2다.
+그래서 "다음 이슈 번호"를 미리 예상하고 브랜치를 파면 대체로 빗나간다. **이슈를 먼저 만들고 번호를 받아라.**
 
 ---
 
@@ -87,19 +100,50 @@ gh pr create
 <타입>/<이슈번호>-<스코프>-<영문-슬러그>
 ```
 
-모노레포이므로 **스코프로 어느 영역인지 밝힌다.** 여러 영역에 걸치거나 공통이면 생략한다.
+**무슨 종류 / 몇 번 이슈 - 어디 - 뭘 하는지** 네 조각이다. 실제 브랜치를 뜯어보면 이렇다.
 
-| 예시 | 설명 |
+```
+feat / 12 - be - party-matching-api
+ │     │     │          │
+ │     │     │          └ 슬러그     무슨 작업인가
+ │     │     └ 스코프                어느 영역인가
+ │     └ 이슈번호                    왜 하는가
+ └ 타입                              무슨 종류인가
+
+docs / 9 - erd-architecture-sync     스코프 생략 — 문서라 BE/FE 구분이 없다
+```
+
+| 조각 | 무엇을 적나 | 규칙 |
+|---|---|---|
+| 타입 | 작업의 종류 | 아래 7종 중 하나. **새로 만들지 않는다** |
+| 이슈번호 | 처리하는 이슈 | 숫자만. `#`는 붙이지 않는다 |
+| 스코프 | 어느 영역인가 | `be` · `fe`. 모노레포라서 있는 조각이다. **걸치거나 공통이면 통째로 생략한다** |
+| 슬러그 | 무슨 작업인가 | 영문 소문자와 하이픈만 |
+
+### 타입 7종
+
+이 일곱이 전부다. **커밋 메시지도 같은 7종을 쓴다**(5절).
+
+| 타입 | 언제 쓰나 | 예시 |
+|---|---|---|
+| `feat` | 기능 추가 | `feat/12-be-party-matching-api` |
+| `fix` | 버그 수정 | `fix/15-fe-proposal-card-expiry` |
+| `docs` | 문서만 | `docs/18-erd-update` |
+| `refactor` | 동작은 그대로, 구조만 개선 | `refactor/21-be-matching-service` |
+| `test` | 테스트만 | `test/24-be-seat-contention` |
+| `chore` | 빌드·설정·의존성 | `chore/27-github-actions` |
+| `perf` | 성능 개선 | `perf/30-be-candidate-query` |
+
+### 슬러그
+
+영문 소문자와 하이픈만 쓴다. **한글·공백·대문자는 도구에 따라 깨진다.**
+
+| | |
 |---|---|
-| `feat/12-be-party-matching-api` | 백엔드 기능 추가 |
-| `fix/15-fe-proposal-card-expiry` | 프론트엔드 버그 수정 |
-| `docs/18-erd-update` | 문서 — 스코프 없음 |
-| `refactor/21-be-matching-service` | 동작 변경 없는 구조 개선 |
-| `test/24-be-seat-contention` | 테스트만 |
-| `chore/27-github-actions` | 빌드·설정·의존성 — 저장소 공통 |
-| `perf/30-be-candidate-query` | 성능 개선 |
-
-슬러그는 영문 소문자와 하이픈만 쓴다. 한글·공백·대문자는 도구에 따라 깨진다.
+| `erd-architecture-sync` | 좋다 |
+| `ERD업데이트` | 한글 — 도구에 따라 깨진다 |
+| `erd update` | 공백 — 셸에서 인자가 쪼개진다 |
+| `ERD-Update` | 대문자 — OS마다 대소문자 구분이 달라 충돌한다 |
 
 ---
 
