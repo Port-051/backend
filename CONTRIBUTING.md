@@ -500,6 +500,17 @@ git push origin --delete spike/31-hongjae
 
 스파이크 이슈는 **마지막 조각이 머지될 때** 닫는다. 판정일이 아니다.
 
+태그는 브랜치를 지운 뒤에도 커밋을 붙잡는다. author·시각·diff가 원본 그대로 남고
+`https://github.com/Port-051/backend/commits/spike-31-hongjae` 로 그대로 열린다.
+
+**개인 저장소에 미러하고 싶으면 해도 된다. 강제하지 않는다.**
+태그만으로 커밋 내역은 이미 증명되므로, 팀 저장소가 언젠가 정리될 경우를
+대비하려는 사람만 하면 된다. 가져가는 것은 **자기가 쓴 코드까지다** — `docs/`는 팀 산출물이다.
+
+```bash
+git push git@github.com:hongjae/queuemate-matching-spike.git spike/31-hongjae:main
+```
+
 ### 그동안 main은
 
 몇 주간 코드가 들어오지 않는다. **사고가 아니라 계획이어야 한다.**
