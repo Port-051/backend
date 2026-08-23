@@ -488,6 +488,25 @@ git checkout spike/31-jihoon -- src/matching/filter/
 
 판정에서 뽑아둔 "나머지에서 가져올 조각"도 여기 섞는다.
 
+#### 원작자를 커밋에 남긴다
+
+옮긴 사람이 커밋하므로 author는 옮긴 사람이 된다.
+**재투입 커밋에는 원작자를 `Co-Authored-By`로 반드시 적는다.**
+
+```
+feat: 후보 제외 필터 구현
+
+spike-31-jihoon에서 옮겼다. 파티 단위 음성 규칙은 옮기면서 함수로 뺐다.
+
+Co-Authored-By: jihoon <12345678+jihoon@users.noreply.github.com>
+```
+
+`main`은 Squash merge라 조각 하나에 커밋 하나만 남는다(8절).
+**이 줄이 없으면 그 코드를 누가 썼는지 `main` 로그에서 알 방법이 사라진다.**
+스파이크 태그는 그 브랜치를 증명할 뿐, `main` 히스토리를 채우지 않는다.
+
+이메일은 각자 GitHub 계정에 연결된 것을 쓴다. 공개하지 않으려면 `noreply` 주소를 쓴다.
+
 ### 끝난 뒤
 
 **채택 여부와 무관하게 셋 다 태그로 남기고 지운다.** 채택된 것도 그대로는 머지되지 않으므로 처지가 같다.
@@ -499,6 +518,17 @@ git push origin --delete spike/31-hongjae
 ```
 
 스파이크 이슈는 **마지막 조각이 머지될 때** 닫는다. 판정일이 아니다.
+
+태그는 브랜치를 지운 뒤에도 커밋을 붙잡는다. author·시각·diff가 원본 그대로 남고
+`https://github.com/Port-051/backend/commits/spike-31-hongjae` 로 그대로 열린다.
+
+**개인 저장소에 미러하고 싶으면 해도 된다. 강제하지 않는다.**
+태그만으로 커밋 내역은 이미 증명되므로, 팀 저장소가 언젠가 정리될 경우를
+대비하려는 사람만 하면 된다. 가져가는 것은 **자기가 쓴 코드까지다** — `docs/`는 팀 산출물이다.
+
+```bash
+git push git@github.com:hongjae/queuemate-matching-spike.git spike/31-hongjae:main
+```
 
 ### 그동안 main은
 
@@ -522,3 +552,4 @@ git push origin --delete spike/31-hongjae
 - 스파이크 브랜치를 그대로 `main`에 머지 — 조각내서 재투입한다
 - 스파이크 기간에 서로의 코드 들여다보기
 - 스파이크 브랜치를 태그 없이 삭제
+- 재투입 커밋에 원작자 `Co-Authored-By`를 빠뜨리기
