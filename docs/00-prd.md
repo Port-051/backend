@@ -1,6 +1,6 @@
-# PRD — party-matcher
+# PRD — QueueMate
 
-> 리그 오브 레전드 파티 자동 매칭 서비스. Port-051 · SW마에스트로 17기 · 6개월
+> **큐메이트(QueueMate)** — 게임 파티 자동 매칭 서비스. Port-051 · SW마에스트로 17기 · 6개월
 
 이 문서는 **무엇을 왜 만드는가**를 고정한다.
 구현 방법은 `01-functional-spec-mvp.md`, 불변식과 측정 기준은 `02-technical-spec-supplement.md`에 있다.

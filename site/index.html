@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>party-matcher 백엔드 설계</title>
+<title>QueueMate 백엔드 설계</title>
 <style>*,*::before,*::after{box-sizing:border-box}body{margin:0}</style>
 </head>
 <body>
@@ -778,7 +778,7 @@
 
 <nav class="topbar" id="topbar">
   <div class="topbar-inner">
-    <a class="brand" href="#/index"><span class="dot"></span>party-matcher<span class="sub">Backend</span></a>
+    <a class="brand" href="#/index"><span class="dot"></span>QueueMate<span class="sub">Backend</span></a>
     <div class="navlinks">
       <a href="#/index">문서맵</a>
       <a href="#/prd">PRD</a>
@@ -806,10 +806,10 @@
   <!-- ============ INDEX ============ -->
   <article class="page" id="page-index">
     <div class="page-head">
-      <p class="eyebrow">party-matcher · Port-051</p>
+      <p class="eyebrow">QueueMate · Port-051</p>
       <h1>파티 매칭 백엔드 설계</h1>
       <p class="standfirst">
-        조건이 맞는 사람을 서버가 묶어 확정하는 배정 시스템. 리그 오브 레전드 파티 매칭이 도메인이고,
+        조건이 맞는 사람을 서버가 묶어 확정하는 배정 시스템. 게임 파티 매칭이 도메인이고,
         실제 과제는 좌석 경합·중복 배정·배치 멱등성이다.
       </p>
     </div>
@@ -1800,7 +1800,7 @@
     </div>
 
     <div class="dg">
-      <svg viewBox="0 0 1000 372" role="img" aria-label="party-matcher 데이터 모델 관계 지도">
+      <svg viewBox="0 0 1000 372" role="img" aria-label="QueueMate 데이터 모델 관계 지도">
         <defs>
           <marker id="erd-arrow" viewBox="0 0 8 8" refX="7.5" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto">
             <path d="M0 0 L8 4 L0 8 Z" class="d-arrow"/>
@@ -1975,7 +1975,7 @@
 
     <div class="dg">
       <svg viewBox="0 0 1670 750.5" role="img" style="min-width:1670px"
-           aria-label="party-matcher 상세 ERD. 사용자·요청과 제안·파티·연동과 알림 네 영역에 걸친 테이블 16개와 그 사이 관계를 까마귀발 표기로 그린 도면.">
+           aria-label="QueueMate 상세 ERD. 사용자·요청과 제안·파티·연동과 알림 네 영역에 걸친 테이블 16개와 그 사이 관계를 까마귀발 표기로 그린 도면.">
         <defs>
           <marker id="cf-one" viewBox="0 0 14 12" refX="13" refY="6" markerWidth="14" markerHeight="12" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
             <path class="d-cf" d="M9 1.5 V10.5"/>
@@ -3049,14 +3049,14 @@ ALTER TABLE party_discord_channel
 </div>
 
 <footer class="site">
-  party-matcher · Port-051 · 리그 오브 레전드 파티 자동 매칭 백엔드.
+  QueueMate · Port-051 · 게임 파티 자동 매칭 백엔드.
   수치는 측정 전 목표값이며, 재현되지 않은 문제는 해결됐다고 적지 않는다.
 </footer>
 
 <script id="docscript">
   (function () {
     var DEFAULT = 'index';
-    var TITLE = 'party-matcher 백엔드 설계';
+    var TITLE = 'QueueMate 백엔드 설계';
     var DRAFT_KEY = 'pm-draft-v1';
 
     var wrap = document.getElementById('wrap');
@@ -3156,7 +3156,7 @@ ALTER TABLE party_discord_channel
       });
       if (scroll) { window.scrollTo(0, 0); }
       var h1 = pages[key].querySelector('h1');
-      if (h1) { document.title = h1.textContent.trim() + ' · party-matcher'; }
+      if (h1) { document.title = h1.textContent.trim() + ' · QueueMate'; }
     }
 
     // 이 페이지는 iframe 안에서 열릴 수 있다. 그 경우 앵커 클릭이 상위 프레임으로
