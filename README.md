@@ -106,5 +106,6 @@ App × 2  ─┬─  RDB
 - [기술 보완 명세](docs/02-technical-spec-supplement.md) — 분산 전제, 불변식, 실시간 전달, 알림, 측정 목표
 - [데이터 모델 (ERD)](docs/03-data-model.md) — 테이블과 불변식이 박히는 제약
 - [기술 스택](docs/04-tech-stack.md) — 무엇으로 만드는가, 각 항목이 어느 단계에서 들어오는가
+- [실시간 매칭 — 지켜야 할 것](docs/05-realtime-matching-contract.md) — 맞출 계약과 자율 범위
 - [기여 규약](CONTRIBUTING.md) — 브랜치 전략, 커밋·PR·리뷰 규칙
 - [CI/CD](docs/ci-cd.md) — 자동 검사, 머지 게이트, 배포
