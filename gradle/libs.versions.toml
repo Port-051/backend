@@ -1,0 +1,9 @@
+[versions]
+spring-boot = "4.1.1"      # 04-tech-stack.md 2.2가 정한 4.1 계열의 현행 패치
+testcontainers = "2.0.5"   # Boot 4 BOM이 관리하지 않으므로 여기서 고정한다
+
+[libraries]
+testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }

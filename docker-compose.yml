@@ -1,0 +1,41 @@
+# 02 1.2 — 모든 측정은 인스턴스 2대 이상에서 한다.
+# 1대로는 좌석 경합도 인스턴스 간 제안 전파도 재현되지 않는다.
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+
+  app-1:
+    build: .
+    environment:
+      REDIS_HOST: redis
+      MATCHING_INSTANCE_ID: app-1
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  app-2:
+    build: .
+    environment:
+      REDIS_HOST: redis
+      MATCHING_INSTANCE_ID: app-2
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  lb:
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app-1
+      - app-2
