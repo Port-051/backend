@@ -152,7 +152,7 @@ erDiagram
     party_member {
         bigint request_id PK "PK가 곧 INV-3"
         bigint party_id FK
-        bigint user_id FK
+        bigint user_id FK "INV-6 부분 유니크 키"
         text position "INV-4 부분 유니크 키"
         timestamptz joined_at
         timestamptz left_at "NULL이면 현재 참가 중"
@@ -229,7 +229,7 @@ erDiagram
 |---|---|---|
 | `match_request` | **02 참조 스키마** | 매칭 요청. 티어 스냅샷을 들고 있다 |
 | `party` | **02 참조 스키마** | 확정된 파티 |
-| `party_member` | **02 참조 스키마** | 파티 참가자. INV-1·INV-3·INV-4가 전부 여기 걸린다 |
+| `party_member` | **02 참조 스키마** | 파티 참가자. INV-1·INV-3·INV-4·INV-6이 전부 여기 걸린다 |
 | `user_busy_interval` | **02 참조 스키마** | INV-2를 DB 제약으로 막기 위한 전용 테이블 |
 | `party_rating` | **02 참조 스키마** | 1클릭 평가 |
 | `user_relation` | **02 참조 스키마** | 재회 목록과 차단 쌍 |
@@ -285,6 +285,7 @@ Discord Worker는 `discord-commands` 큐에서 `CREATE_DISCORD_ROOM`을 받는�
 | **INV-3** 요청 단일 배정 | `party_member.request_id` **PK** | 배치가 구조적으로 멱등해진다 |
 | **INV-4** 포지션 중복 | `UNIQUE (party_id, position) WHERE left_at IS NULL` | 부분 인덱스라 이탈한 자리가 다시 열린다 |
 | **INV-5** 알림 중복 발송 | `notification_job.dedup_key` **UNIQUE** | 전송은 at-least-once, 차단은 기록 쪽에서 |
+| **INV-6** 파티 내 사용자 중복 | `UNIQUE (party_id, user_id) WHERE left_at IS NULL` | INV-4와 같은 형태다. 나머지 다섯이 못 잡는 위반을 닫는다 |
 | (번호 없음) Discord 채널 중복 생성 | `party_discord_channel.party_id` **PK** | INV-5와 성격이 같다. 불변식 목록에 넣을지는 `02`에서 정한다 |
 | (번호 없음) 참가자 중복 투입 | `party_discord_member` **PK (party_id, user_id)** | 위와 같은 성격. 투입 명령의 멱등키다 |
 
@@ -307,6 +308,10 @@ CREATE UNIQUE INDEX uq_member_position
 -- INV-5
 ALTER TABLE notification_job ADD CONSTRAINT uq_notif_dedup UNIQUE (dedup_key);
 
+-- INV-6
+CREATE UNIQUE INDEX uq_member_user
+  ON party_member (party_id, user_id) WHERE left_at IS NULL;
+
 -- 중복 평가 차단
 ALTER TABLE party_rating ADD CONSTRAINT pk_rating PRIMARY KEY (party_id, rater_id, ratee_id);
 
@@ -319,7 +324,7 @@ ALTER TABLE party_discord_member
   ADD CONSTRAINT pk_discord_member PRIMARY KEY (party_id, user_id);
 ```
 
-**다섯 중 넷은 제약으로 막히고 INV-1만 못 막는다.**
+**여섯 중 다섯은 제약으로 막히고 INV-1만 못 막는다.**
 그래서 좌석 경합이 이 프로젝트의 본체이고, M1·M2가 거기에 배정돼 있다.
 
 **`seat_recruitment`가 좌석 경합의 무대다.** 좌석 하나는 `uq_member_position`의 키 하나이며,
@@ -347,7 +352,7 @@ ALTER TABLE party_discord_member
 두 큐 모두 at-least-once에 재시도·DLQ가 붙어 있다. **중복 전달을 막으려 하지 않고, 중복 반영을 막는다.**
 발송 예정 시각은 `notification_job.fire_at`에 남으므로, 큐가 비어도 예약된 알림은 복원할 수 있다.
 
-Redis도 SQS도 통째로 날아가고 다시 채워져도 위 다섯 불변식은 유지된다. 제약이 PostgreSQL에 있기 때문이다.
+Redis도 SQS도 통째로 날아가고 다시 채워져도 위 여섯 불변식은 유지된다. 제약이 PostgreSQL에 있기 때문이다.
 
 ## 6. 아직 정하지 않은 것
 
