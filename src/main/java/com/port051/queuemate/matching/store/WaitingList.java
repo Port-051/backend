@@ -1,0 +1,68 @@
+package com.port051.queuemate.matching.store;
+
+import com.port051.queuemate.matching.domain.MatchRequest;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.Set;
+
+/**
+ * 대기 명단 {@code mq:...}. 05-realtime-matching-contract 1장 — "누가 먼저 왔는지 순서만".
+ *
+ * <p>Sorted Set을 쓴다. score를 {@code requestedAt}으로 두면 Redis가 정렬을 대신 해 주므로
+ * 매칭 루프는 앞에서부터 읽기만 하면 된다.
+ *
+ * <p><b>요청 ID를 자리수를 채운 문자열로 넣는 이유가 있다.</b> 4.3의 전순서는
+ * {@code (신청 시각, 요청 ID)}인데 Sorted Set의 score는 숫자 하나뿐이라 두 값을 담을 수 없다.
+ * 남은 동률은 Redis가 <b>멤버를 사전순으로</b> 가르는데, 요청 ID를 그대로 넣으면
+ * {@code "10" < "9"}가 되어 늦게 신청한 사람이 앞에 선다. 자리수를 맞춰 두면
+ * 사전순과 숫자 크기 순이 일치한다.
+ *
+ * <p>score에 두 값을 합쳐 담는 방법도 있으나 쓸 수 없다. score는 {@code double}이고
+ * 정수를 정확히 담을 수 있는 폭이 53비트인데, epoch millis가 이미 41비트를 쓴다.
+ * 남는 12비트로는 요청 ID를 4096개밖에 구분하지 못한다.
+ */
+@Component
+public class WaitingList {
+
+    /** {@code Long.MAX_VALUE}가 19자리다. 이보다 짧으면 큰 요청 ID에서 다시 순서가 뒤집힌다. */
+    private static final String MEMBER_FORMAT = "%019d";
+
+    private final StringRedisTemplate redis;
+
+    public WaitingList(StringRedisTemplate redis) {
+        this.redis = redis;
+    }
+
+    /** 명단에 올린다. 이미 있으면 순서만 갱신된다. */
+    public void add(MatchRequest request) {
+        redis.opsForZSet().add(key(), member(request.requestId()), request.requestedAt());
+    }
+
+    /** 명단에서 지운다. 취소 · 만료 · 파티 확정에서 부른다. */
+    public void remove(long requestId) {
+        redis.opsForZSet().remove(key(), member(requestId));
+    }
+
+    /** 대기 중인 요청 ID를 전순서대로 읽는다. */
+    public List<Long> requestIds() {
+        Set<String> members = redis.opsForZSet().range(key(), 0, -1);
+        return members == null ? List.of() : members.stream().map(Long::valueOf).toList();
+    }
+
+    /** 대기 인원. 3.1이 조건 입력 화면에 표시하라고 한 값이다. */
+    public long size() {
+        Long size = redis.opsForZSet().size(key());
+        return size == null ? 0 : size;
+    }
+
+    /** 사전순이 숫자 크기 순과 같아지도록 자리수를 채운다. */
+    private static String member(long requestId) {
+        return MEMBER_FORMAT.formatted(requestId);
+    }
+
+    private static String key() {
+        return "mq:instant";
+    }
+}
