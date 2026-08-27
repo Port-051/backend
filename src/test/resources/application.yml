@@ -16,3 +16,5 @@ queuemate:
     max-wait: 5m
     claim-ttl: 3s
     tick: 1s
+    # 테스트가 6분을 기다릴 수 없다. 연결을 닫지 않고 끝나는 테스트가 있어도 곧 풀린다.
+    sse-timeout: 5s

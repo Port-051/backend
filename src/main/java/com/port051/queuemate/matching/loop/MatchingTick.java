@@ -9,6 +9,8 @@ import com.port051.queuemate.matching.store.RequestExpiry;
 import com.port051.queuemate.matching.store.RequestStore;
 import com.port051.queuemate.matching.store.UserGuard;
 import com.port051.queuemate.matching.store.WaitingList;
+import com.port051.queuemate.matching.sse.EventPublisher;
+import com.port051.queuemate.matching.sse.MatchingEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -46,17 +48,20 @@ public class MatchingTick {
     private final ClaimStore claims;
     private final RequestExpiry expiry;
     private final UserGuard userGuard;
+    private final EventPublisher events;
 
     public MatchingTick(WaitingList waitingList,
                         RequestStore requestStore,
                         ClaimStore claims,
                         RequestExpiry expiry,
-                        UserGuard userGuard) {
+                        UserGuard userGuard,
+                        EventPublisher events) {
         this.waitingList = waitingList;
         this.requestStore = requestStore;
         this.claims = claims;
         this.expiry = expiry;
         this.userGuard = userGuard;
+        this.events = events;
     }
 
     /**
@@ -131,6 +136,9 @@ public class MatchingTick {
             // 이 요청은 끝났으므로 사용자당 대기 자리도 비운다. 안 비우면 파티가 잡힌 사람이
             // 유지 시간이 끝날 때까지 다음 신청을 하지 못한다.
             userGuard.releaseAll(party.members().stream().map(MatchRequest::userId).toList());
+            // 저장이 끝난 뒤에 알린다(02 3.2). 먼저 알리면 확정에 실패했는데
+            // "파티가 잡혔다"는 소식이 이미 나간 상태가 된다.
+            events.publishAll(MatchingEvent.confirmed(party));
             log.info("파티 성립: {} {}", partition, requestIds);
             return true;
         } finally {

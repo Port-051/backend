@@ -5,6 +5,8 @@ import org.springframework.stereotype.Component;
 
 import com.port051.queuemate.matching.domain.MatchRequest;
 import com.port051.queuemate.matching.domain.Partition;
+import com.port051.queuemate.matching.sse.EventPublisher;
+import com.port051.queuemate.matching.sse.MatchingEvent;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -27,17 +29,20 @@ public class RequestExpiry {
     private final WaitingList waitingList;
     private final RequestStore requestStore;
     private final UserGuard userGuard;
+    private final EventPublisher events;
     private final RedisClock clock;
     private final Duration maxWait;
 
     public RequestExpiry(WaitingList waitingList,
                          RequestStore requestStore,
                          UserGuard userGuard,
+                         EventPublisher events,
                          RedisClock clock,
                          @Value("${queuemate.matching.max-wait:5m}") Duration maxWait) {
         this.waitingList = waitingList;
         this.requestStore = requestStore;
         this.userGuard = userGuard;
+        this.events = events;
         this.clock = clock;
         this.maxWait = maxWait;
     }
@@ -72,13 +77,15 @@ public class RequestExpiry {
             return List.of();
         }
 
-        // 지우기 전에 읽어 둔다. 사용자당 대기 자리를 비우려면 누구 것인지 알아야 하는데
-        // 그 정보가 메모 안에만 있다. 메모를 먼저 지우면 자리를 비울 방법이 없어진다.
-        List<Long> userIds = requestStore.findAll(expired).stream().map(MatchRequest::userId).toList();
+        // 지우기 전에 읽어 둔다. 대기 자리를 비우려면 누구 것인지, 만료를 알리려면 어떤 조건이었는지
+        // 알아야 하는데 그 정보가 메모 안에만 있다. 메모를 먼저 지우면 둘 다 할 수 없다.
+        List<MatchRequest> requests = requestStore.findAll(expired);
 
         waitingList.removeUpTo(partition, threshold);
         requestStore.deleteAll(expired);
-        userGuard.releaseAll(userIds);
+        userGuard.releaseAll(requests.stream().map(MatchRequest::userId).toList());
+        // 정리가 끝난 뒤에 알린다(02 3.2).
+        events.publishAll(requests.stream().map(MatchingEvent::expired).toList());
         return expired;
     }
 
