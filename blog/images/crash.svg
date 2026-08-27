@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 400" width="720" height="400" role="img" aria-label="선점 뒤 인스턴스가 멈췄을 때 명단 삭제와 claim의 차이">
+  <style>
+    .bg { fill: #ffffff; }
+    .t  { font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+    .m  { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .title  { font-size: 15px; font-weight: 600; fill: #12151a; }
+    .head   { font-size: 13px; font-weight: 600; fill: #12151a; }
+    .step   { font-size: 11.5px; fill: #29303a; }
+    .code   { font-size: 11px; fill: #4e5765; }
+    .crash  { font-size: 11.5px; font-weight: 600; fill: #b8471c; }
+    .good   { font-size: 12px; font-weight: 600; fill: #15803d; }
+    .bad    { font-size: 12px; font-weight: 600; fill: #c2410c; }
+    .panel  { fill: #f7f8fa; stroke: #e2e5ea; stroke-width: 1; }
+    .box    { fill: #ffffff; stroke: #d7dbe0; stroke-width: 1; }
+    .arrow  { stroke: #9aa3af; stroke-width: 1.2; fill: none; }
+  </style>
+
+  <rect class="bg" x="0" y="0" width="720" height="400"/>
+  <text class="t title" x="16" y="28">선점한 뒤 인스턴스가 멈추면</text>
+  <text class="t code" x="16" y="48">배포 재시작 · OOM · 긴 GC 정지. 선점과 확정 사이는 아무리 짧아도 0이 아니다.</text>
+
+  <rect class="panel" x="16" y="64" width="336" height="272" rx="6"/>
+  <text class="t head" x="36" y="90">명단에서 먼저 지운다</text>
+
+  <rect class="box" x="36" y="104" width="296" height="44" rx="4"/>
+  <text class="t step" x="50" y="122">1 · 참가자 전원을 명단에서 제거</text>
+  <text class="t m code" x="50" y="139">ZREM mq:instant 1 2</text>
+
+  <path class="arrow" d="M184,148 L184,164"/>
+  <text class="t crash" x="196" y="162">✕ 여기서 멈춘다</text>
+
+  <rect class="box" x="36" y="170" width="296" height="44" rx="4"/>
+  <text class="t step" x="50" y="188">2 · Redis에 남은 것</text>
+  <text class="t m code" x="50" y="205">mq:instant → 1·2 없음 · 확정 기록 없음</text>
+
+  <path class="arrow" d="M184,214 L184,232"/>
+
+  <rect class="box" x="36" y="238" width="296" height="60" rx="4"/>
+  <text class="t step" x="50" y="258">3 · 되돌릴 주체가 사라졌다</text>
+  <text class="t step" x="50" y="276">요청은 명단에도 없고 파티에도 없다.</text>
+  <text class="t step" x="50" y="292">사용자는 대기 화면에 영원히 남는다.</text>
+
+  <text class="t bad" x="36" y="322">400건 중 98건 증발 (24.5%)</text>
+
+  <rect class="panel" x="368" y="64" width="336" height="272" rx="6"/>
+  <text class="t head" x="388" y="90">명단에 두고 표시를 건다</text>
+
+  <rect class="box" x="388" y="104" width="296" height="44" rx="4"/>
+  <text class="t step" x="402" y="122">1 · 명단은 그대로, 표시만 건다</text>
+  <text class="t m code" x="402" y="139">SET claim:1 &lt;token&gt; PX 3000</text>
+
+  <path class="arrow" d="M536,148 L536,164"/>
+  <text class="t crash" x="548" y="162">✕ 여기서 멈춘다</text>
+
+  <rect class="box" x="388" y="170" width="296" height="44" rx="4"/>
+  <text class="t step" x="402" y="188">2 · Redis에 남은 것</text>
+  <text class="t m code" x="402" y="205">mq:instant → 1·2 그대로 · claim 걸린 채</text>
+
+  <path class="arrow" d="M536,214 L536,232"/>
+
+  <rect class="box" x="388" y="238" width="296" height="60" rx="4"/>
+  <text class="t step" x="402" y="258">3 · 유지 시간이 지나면 표시가 풀린다</text>
+  <text class="t step" x="402" y="276">요청은 명단에 그대로 있으므로</text>
+  <text class="t step" x="402" y="292">다음 사이클에서 다시 후보가 된다.</text>
+
+  <text class="t good" x="388" y="322">400건 중 0건 증발</text>
+
+  <text class="t code" x="16" y="364">측정 조건 — 요청 400건, 인스턴스 4개, 네 번째 선점마다 멈춤, claim 유지 시간 100ms.</text>
+  <text class="t code" x="16" y="382">두 방식 모두 중복 배정은 0건이었다. 갈리는 것은 멈춤 이후뿐이다.</text>
+</svg>

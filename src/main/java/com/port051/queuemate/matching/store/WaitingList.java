@@ -2,6 +2,8 @@ package com.port051.queuemate.matching.store;
 
 import com.port051.queuemate.matching.domain.MatchRequest;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -29,6 +31,24 @@ public class WaitingList {
     /** {@code Long.MAX_VALUE}가 19자리다. 이보다 짧으면 큰 요청 ID에서 다시 순서가 뒤집힌다. */
     private static final String MEMBER_FORMAT = "%019d";
 
+    /**
+     * 전원을 지우거나 아무도 지우지 않는다.
+     *
+     * <p>먼저 전원이 명단에 있는지 확인하고, 한 명이라도 없으면 아무것도 건드리지 않는다.
+     * Redis는 스크립트를 실행하는 동안 다른 명령을 받지 않으므로 확인과 삭제 사이에 틈이 없다.
+     */
+    private static final RedisScript<Long> REMOVE_ALL = new DefaultRedisScript<>("""
+            for i = 1, #ARGV do
+              if redis.call('ZSCORE', KEYS[1], ARGV[i]) == false then
+                return 0
+              end
+            end
+            for i = 1, #ARGV do
+              redis.call('ZREM', KEYS[1], ARGV[i])
+            end
+            return 1
+            """, Long.class);
+
     private final StringRedisTemplate redis;
 
     public WaitingList(StringRedisTemplate redis) {
@@ -43,6 +63,29 @@ public class WaitingList {
     /** 명단에서 지운다. 취소 · 만료 · 파티 확정에서 부른다. */
     public void remove(long requestId) {
         redis.opsForZSet().remove(key(), member(requestId));
+    }
+
+    /**
+     * 전원을 명단에서 지우거나 아무도 지우지 않는다.
+     *
+     * <p>{@link ClaimStore}와 다른 선점 방식이다. 배정 중 표시를 따로 두는 대신
+     * <b>명단에서 빼내는 것 자체를 선점으로</b> 삼는다. 명단에서 사라지면 다른 인스턴스가
+     * 그 요청을 후보로 잡을 수 없으므로 같은 사람이 두 파티에 들어가지 않는다.
+     *
+     * <p>{@code ZREM}은 실제로 지운 개수를 돌려준다. 그 값이 요청한 수와 같을 때만
+     * 전원을 잡은 것이고, 하나라도 모자라면 <b>이미 지운 것을 되돌려 놓아야</b> 한다.
+     * 되돌리려면 원래 score를 알아야 하므로 지우기 전에 먼저 읽어 둔다.
+     * 이 확인·삭제·복구가 한 스크립트 안에서 끝나야 다른 인스턴스가 중간 상태를 보지 않는다.
+     *
+     * @return 전원을 지웠으면 참. 빈 목록은 잡은 것이 없으므로 거짓이다
+     */
+    public boolean removeAll(List<Long> requestIds) {
+        if (requestIds.isEmpty()) {
+            return false;
+        }
+        Long removed = redis.execute(REMOVE_ALL, List.of(key()),
+                requestIds.stream().map(WaitingList::member).toArray());
+        return removed != null && removed == 1;
     }
 
     /** 대기 중인 요청 ID를 전순서대로 읽는다. */

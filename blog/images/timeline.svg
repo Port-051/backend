@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 300" width="720" height="300" role="img" aria-label="두 인스턴스가 같은 대기 명단을 읽는 타임라인">
+  <style>
+    .bg { fill: #ffffff; }
+    .t  { font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+    .title { font-size: 15px; font-weight: 600; fill: #12151a; }
+    .lane  { font-size: 12px; font-weight: 600; fill: #12151a; }
+    .step  { font-size: 11.5px; fill: #ffffff; font-weight: 500; }
+    .note  { font-size: 11.5px; fill: #4e5765; }
+    .res   { font-size: 13px; font-weight: 600; fill: #c2410c; }
+    .axis  { stroke: #d7dbe0; stroke-width: 1; }
+    .cut   { stroke: #7c8694; stroke-width: 1; stroke-dasharray: 3 3; }
+  </style>
+
+  <rect class="bg" x="0" y="0" width="720" height="300"/>
+  <text class="t title" x="16" y="28">읽기와 확정 사이 — 두 인스턴스가 같은 명단을 본다</text>
+
+  <rect x="252" y="52" width="86" height="150" fill="#eb68341a"/>
+  <line class="cut" x1="252" y1="52" x2="252" y2="228"/>
+  <line class="cut" x1="338" y1="52" x2="338" y2="228"/>
+
+  <text class="t lane" x="16" y="88">인스턴스 A</text>
+  <rect x="96" y="70" width="96" height="28" rx="4" fill="#2a78d6"/>
+  <text class="t step" x="144" y="88" text-anchor="middle">명단 읽기</text>
+  <rect x="194" y="70" width="142" height="28" rx="4" fill="#5596e0"/>
+  <text class="t step" x="265" y="88" text-anchor="middle">파티 계산</text>
+  <rect x="338" y="70" width="96" height="28" rx="4" fill="#1c5da8"/>
+  <text class="t step" x="386" y="88" text-anchor="middle">확정 · 명단 제거</text>
+
+  <text class="t lane" x="16" y="158">인스턴스 B</text>
+  <rect x="256" y="140" width="96" height="28" rx="4" fill="#eb6834"/>
+  <text class="t step" x="304" y="158" text-anchor="middle">명단 읽기</text>
+  <rect x="354" y="140" width="142" height="28" rx="4" fill="#f08a5f"/>
+  <text class="t step" x="425" y="158" text-anchor="middle">파티 계산</text>
+  <rect x="498" y="140" width="96" height="28" rx="4" fill="#b8471c"/>
+  <text class="t step" x="546" y="158" text-anchor="middle">확정 · 명단 제거</text>
+
+  <line class="axis" x1="96" y1="228" x2="700" y2="228"/>
+  <text class="t note" x="96" y="246">시간 →</text>
+
+  <text class="t note" x="252" y="272">B가 읽은 명단에는 1·2번이 아직 그대로 있다.</text>
+  <text class="t note" x="252" y="290">매처는 결정적이므로 B도 똑같이 파티 {1, 2}를 만든다.</text>
+
+  <text class="t res" x="16" y="290">결과 — 파티 {1, 2}가 두 번 확정된다</text>
+</svg>

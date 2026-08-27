@@ -7,6 +7,7 @@ import com.port051.queuemate.matching.domain.Purpose;
 import com.port051.queuemate.matching.domain.VoiceMode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -149,5 +150,72 @@ class WaitingListTest {
         waitingList.add(request(1L, 100));
 
         assertThat(waitingList.size()).isEqualTo(1);
+    }
+
+    @Nested
+    @DisplayName("전원 아니면 아무도 지우지 않기")
+    class RemoveAll {
+
+        @Test
+        @DisplayName("전원이 명단에 있으면 전부 지운다")
+        void removesEveryone() {
+            waitingList.add(request(1L, 100));
+            waitingList.add(request(2L, 200));
+            waitingList.add(request(3L, 300));
+
+            assertThat(waitingList.removeAll(List.of(1L, 2L))).isTrue();
+
+            assertThat(waitingList.requestIds()).containsExactly(3L);
+        }
+
+        @Test
+        @DisplayName("하나라도 이미 없으면 실패한다")
+        void failsWhenSomeoneIsGone() {
+            waitingList.add(request(1L, 100));
+
+            assertThat(waitingList.removeAll(List.of(1L, 2L))).isFalse();
+        }
+
+        @Test
+        @DisplayName("실패하면 지워진 것이 남지 않는다")
+        void leavesNothingRemovedOnFailure() {
+            waitingList.add(request(1L, 100));
+            waitingList.add(request(2L, 200));
+
+            waitingList.removeAll(List.of(1L, 2L, 3L));
+
+            assertThat(waitingList.requestIds()).containsExactly(1L, 2L);
+        }
+
+        @Test
+        @DisplayName("없는 사람이 마지막이어도 앞의 것들이 남는다")
+        void leavesNothingRemovedWhenLastIsMissing() {
+            waitingList.add(request(1L, 100));
+            waitingList.add(request(2L, 200));
+
+            waitingList.removeAll(List.of(1L, 2L, 99L));
+
+            assertThat(waitingList.requestIds()).containsExactly(1L, 2L);
+        }
+
+        @Test
+        @DisplayName("빈 목록은 지운 것이 없다")
+        void emptyListRemovesNothing() {
+            waitingList.add(request(1L, 100));
+
+            assertThat(waitingList.removeAll(List.of())).isFalse();
+
+            assertThat(waitingList.requestIds()).containsExactly(1L);
+        }
+
+        @Test
+        @DisplayName("두 번째 삭제는 이미 지워졌으므로 실패한다")
+        void secondRemovalFails() {
+            waitingList.add(request(1L, 100));
+            waitingList.add(request(2L, 200));
+
+            assertThat(waitingList.removeAll(List.of(1L, 2L))).isTrue();
+            assertThat(waitingList.removeAll(List.of(1L, 2L))).isFalse();
+        }
     }
 }
