@@ -20,3 +20,9 @@ management:
   endpoint:
     health:
       show-details: always
+
+queuemate:
+  matching:
+    # 최대 대기시간. 01 3.1은 사용자가 고르는 값으로 정의하지만 계약(05 2장)의 필드에 없어
+    # 이 단계에서는 서버가 하나로 정한다.
+    max-wait: 5m

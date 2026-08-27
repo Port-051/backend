@@ -51,6 +51,30 @@ public class WaitingList {
         return members == null ? List.of() : members.stream().map(Long::valueOf).toList();
     }
 
+    /**
+     * 신청 시각이 {@code threshold} 이하인 요청 ID. 만료 대상을 고르는 데 쓴다.
+     *
+     * <p>score가 곧 {@code requestedAt}이므로 만료 판정이 <b>score 범위 조회</b>가 된다.
+     * Sorted Set을 고른 값이 여기서 나온다. List였다면 전체를 훑어야 했다.
+     */
+    public List<Long> requestIdsUpTo(long threshold) {
+        Set<String> members = redis.opsForZSet().rangeByScore(key(), Double.NEGATIVE_INFINITY, threshold);
+        return members == null ? List.of() : members.stream().map(Long::valueOf).toList();
+    }
+
+    /**
+     * 신청 시각이 {@code threshold} 이하인 요청을 명단에서 한 번에 지운다.
+     *
+     * <p>개별 항목에 TTL을 걸 수 없어 이 방식을 쓴다. Redis의 TTL은 <b>키 단위</b>라
+     * Sorted Set에 걸면 대기 명단 전체가 사라진다.
+     *
+     * @return 지운 개수
+     */
+    public long removeUpTo(long threshold) {
+        Long removed = redis.opsForZSet().removeRangeByScore(key(), Double.NEGATIVE_INFINITY, threshold);
+        return removed == null ? 0 : removed;
+    }
+
     /** 대기 인원. 3.1이 조건 입력 화면에 표시하라고 한 값이다. */
     public long size() {
         Long size = redis.opsForZSet().size(key());
