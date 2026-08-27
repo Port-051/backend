@@ -119,6 +119,15 @@ public class MatchingTick {
      * <p>다른 인스턴스가 같은 요청으로 파티를 짜고 있으면 배정 중 표시에서 진다.
      * 진 쪽은 아무것도 남기지 않고 물러난다. 이번 바퀴를 통째로 포기하지는 않는다.
      * 그 파티만 못 만들 뿐 다른 파티는 여전히 성립할 수 있기 때문이다.
+     *
+     * <p><b>배정 중 표시만으로는 부족하다.</b> 표시는 확정이 끝나면 곧바로 풀리는데,
+     * 그 직후 다른 인스턴스가 <b>이미 처리된 같은 파티</b>를 들고 와 표시를 새로 얻을 수 있다.
+     * 앞서 명단을 읽어 둔 상태라 그 요청들이 사라진 줄 모르기 때문이다.
+     * 그래서 <b>명단에서 빼내는 데 성공한 쪽만</b> 확정한다.
+     * {@link WaitingList#removeAll}은 전원을 빼거나 아무도 빼지 않으므로 심판이 될 수 있다.
+     *
+     * <p>즉 역할이 둘로 나뉜다. 표시는 헛일을 줄이는 <b>최적화</b>이고,
+     * 같은 요청이 두 파티에 들어가지 않게 막는 <b>정합성</b>은 명단 삭제가 맡는다.
      */
     private boolean confirm(Partition partition, Party party) {
         List<Long> requestIds = party.members().stream().map(MatchRequest::requestId).toList();
@@ -131,7 +140,12 @@ public class MatchingTick {
 
         try {
             // 명단 먼저, 메모 나중. 순서가 반대면 조건을 읽을 수 없는 요청이 잠깐 명단에 남는다.
-            waitingList.removeAll(partition, requestIds);
+            if (!waitingList.removeAll(partition, requestIds)) {
+                // 한 명이라도 이미 명단에 없다. 남이 먼저 이 파티를 가져갔거나 누가 취소했다.
+                // 아무것도 지우지 않았으므로 남은 사람은 다음 바퀴에 다시 후보가 된다.
+                log.debug("명단에서 빼내지 못해 물러난다: {}", requestIds);
+                return false;
+            }
             requestStore.deleteAll(requestIds);
             // 이 요청은 끝났으므로 사용자당 대기 자리도 비운다. 안 비우면 파티가 잡힌 사람이
             // 유지 시간이 끝날 때까지 다음 신청을 하지 못한다.

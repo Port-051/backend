@@ -27,6 +27,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -253,6 +258,54 @@ class MatchingTickTest {
         assertThat(tick.runOnce()).isEmpty();
         // 못 잡았으니 명단은 그대로다. 다음 바퀴에 다시 시도한다.
         assertThat(waitingList.requestIds(DUO)).containsExactly(1L, 2L);
+    }
+
+    @Test
+    @DisplayName("두 인스턴스가 동시에 돌아도 같은 요청이 두 파티에 들어가지 않는다")
+    void twoInstancesNeverConfirmTheSameRequestTwice() throws Exception {
+        // 실제로 인스턴스 두 대를 띄웠을 때 나온 문제다. 배정 중 표시는 확정이 끝나면 곧바로 풀리는데,
+        // 그 직후 다른 쪽이 이미 처리된 같은 파티를 들고 와 표시를 새로 얻어 두 번 확정했다.
+        for (long id = 1; id <= 20; id++) {
+            register(request(id, GameQueue.SOLO_DUO, 2, Position.values()[(int) (id % 5)]));
+        }
+
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            Future<List<Party>> left = pool.submit(() -> {
+                start.await();
+                return tick.runOnce();
+            });
+            Future<List<Party>> right = pool.submit(() -> {
+                start.await();
+                return tick.runOnce();
+            });
+            start.countDown();
+
+            List<Long> assigned = Stream.concat(left.get().stream(), right.get().stream())
+                    .flatMap(party -> party.members().stream())
+                    .map(MatchRequest::requestId)
+                    .toList();
+
+            assertThat(assigned).doesNotHaveDuplicates();
+            assertThat(assigned).hasSize(20);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    @DisplayName("명단에서 빼내지 못하면 확정하지 않는다")
+    void neverConfirmsWithoutWinningTheWaitingList() {
+        register(request(1L, GameQueue.SOLO_DUO, 2, Position.MID));
+        register(request(2L, GameQueue.SOLO_DUO, 2, Position.TOP));
+        // 남이 먼저 가져가 명단에서 사라진 상황을 흉내낸다. 메모는 남겨 두어 후보로는 잡히게 한다.
+        waitingList.removeAll(DUO, List.of(2L));
+
+        assertThat(tick.runOnce()).isEmpty();
+        // 아무것도 지우지 않았으므로 1번은 그대로 남는다.
+        assertThat(waitingList.requestIds(DUO)).containsExactly(1L);
+        assertThat(requestStore.find(1L)).isPresent();
     }
 
     @Test
