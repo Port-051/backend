@@ -7,6 +7,7 @@ import com.port051.queuemate.matching.domain.PartyMatcher;
 import com.port051.queuemate.matching.store.ClaimStore;
 import com.port051.queuemate.matching.store.RequestExpiry;
 import com.port051.queuemate.matching.store.RequestStore;
+import com.port051.queuemate.matching.store.UserGuard;
 import com.port051.queuemate.matching.store.WaitingList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,15 +45,18 @@ public class MatchingTick {
     private final RequestStore requestStore;
     private final ClaimStore claims;
     private final RequestExpiry expiry;
+    private final UserGuard userGuard;
 
     public MatchingTick(WaitingList waitingList,
                         RequestStore requestStore,
                         ClaimStore claims,
-                        RequestExpiry expiry) {
+                        RequestExpiry expiry,
+                        UserGuard userGuard) {
         this.waitingList = waitingList;
         this.requestStore = requestStore;
         this.claims = claims;
         this.expiry = expiry;
+        this.userGuard = userGuard;
     }
 
     /**
@@ -124,6 +128,9 @@ public class MatchingTick {
             // 명단 먼저, 메모 나중. 순서가 반대면 조건을 읽을 수 없는 요청이 잠깐 명단에 남는다.
             waitingList.removeAll(partition, requestIds);
             requestStore.deleteAll(requestIds);
+            // 이 요청은 끝났으므로 사용자당 대기 자리도 비운다. 안 비우면 파티가 잡힌 사람이
+            // 유지 시간이 끝날 때까지 다음 신청을 하지 못한다.
+            userGuard.releaseAll(party.members().stream().map(MatchRequest::userId).toList());
             log.info("파티 성립: {} {}", partition, requestIds);
             return true;
         } finally {
