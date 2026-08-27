@@ -5,6 +5,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -44,9 +46,44 @@ public class RequestStore {
         return json == null ? Optional.empty() : Optional.of(JSON.readValue(json, MatchRequest.class));
     }
 
+    /**
+     * 여러 요청을 한 번에 읽는다. 사라진 요청은 결과에서 빠진다.
+     *
+     * <p>하나씩 {@link #find}를 부르면 대기 인원만큼 왕복이 생긴다. 매 틱 도는 경로라
+     * {@code MGET}으로 한 번에 받는다.
+     *
+     * <p>돌려주는 순서는 넘긴 순서와 같다. 넘기는 쪽이 4.3의 전순서를 지켜 왔다면
+     * 그 순서가 그대로 유지된다.
+     */
+    public List<MatchRequest> findAll(List<Long> requestIds) {
+        if (requestIds.isEmpty()) {
+            return List.of();
+        }
+        List<String> values = redis.opsForValue().multiGet(requestIds.stream().map(RequestStore::key).toList());
+        if (values == null) {
+            return List.of();
+        }
+        List<MatchRequest> found = new ArrayList<>(values.size());
+        for (String json : values) {
+            // 읽는 사이에 취소·만료·확정으로 사라진 요청은 null로 온다. 계약대로 그냥 넘어간다.
+            if (json != null) {
+                found.add(JSON.readValue(json, MatchRequest.class));
+            }
+        }
+        return found;
+    }
+
     /** 요청을 지운다. 없던 것을 지워도 문제되지 않는다. */
     public void delete(long requestId) {
         redis.delete(key(requestId));
+    }
+
+    /** 여러 요청을 한 번에 지운다. */
+    public void deleteAll(List<Long> requestIds) {
+        if (requestIds.isEmpty()) {
+            return;
+        }
+        redis.delete(requestIds.stream().map(RequestStore::key).toList());
     }
 
     private static String key(long requestId) {

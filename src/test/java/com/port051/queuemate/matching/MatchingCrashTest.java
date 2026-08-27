@@ -4,6 +4,7 @@ import com.port051.queuemate.matching.domain.GameQueue;
 import com.port051.queuemate.matching.domain.MatchRequest;
 import com.port051.queuemate.matching.domain.Party;
 import com.port051.queuemate.matching.domain.PartyMatcher;
+import com.port051.queuemate.matching.domain.Partition;
 import com.port051.queuemate.matching.domain.Position;
 import com.port051.queuemate.matching.domain.Purpose;
 import com.port051.queuemate.matching.domain.VoiceMode;
@@ -113,6 +114,8 @@ class MatchingCrashTest {
 
     private static final Path OUTPUT =
             Path.of(System.getProperty("matching.crash.out", "measurements/matching-crash.csv"));
+
+    private static final Partition PARTITION = new Partition(GameQueue.SOLO_DUO, 2);
 
     @Autowired
     WaitingList waiting;
@@ -232,7 +235,7 @@ class MatchingCrashTest {
         long crashes = 0;
 
         while (running.get()) {
-            List<MatchRequest> snapshot = waiting.requestIds().stream()
+            List<MatchRequest> snapshot = waiting.requestIds(PARTITION).stream()
                     .map(requests::find)
                     .flatMap(Optional::stream)
                     .toList();
@@ -252,7 +255,7 @@ class MatchingCrashTest {
                 }
 
                 if (guard != Guard.REMOVE) {
-                    memberIds.forEach(waiting::remove);
+                    memberIds.forEach(id -> waiting.remove(PARTITION, id));
                 }
                 confirmed.add(memberIds);
             }
@@ -263,7 +266,7 @@ class MatchingCrashTest {
     /** 3단계 — 참가자 전원을 선점한다. 두 방식이 갈리는 곳은 여기 한 줄뿐이다. */
     private boolean take(Guard guard, List<Long> memberIds) {
         return switch (guard) {
-            case REMOVE -> waiting.removeAll(memberIds);
+            case REMOVE -> waiting.removeAll(PARTITION, memberIds);
             case CLAIM -> claims.claimAll(memberIds).isPresent();
         };
     }
@@ -278,10 +281,10 @@ class MatchingCrashTest {
     private void awaitDrain() {
         long deadline = System.nanoTime() + DRAIN_LIMIT.toNanos();
         while (System.nanoTime() < deadline) {
-            if (waiting.size() == 0) {
+            if (waiting.size(PARTITION) == 0) {
                 // 유지 시간이 남은 표시가 회수되고 그것까지 처리될 여지를 한 번 더 준다.
                 LockSupport.parkNanos(claims.ttl().toNanos() * 2);
-                if (waiting.size() == 0) {
+                if (waiting.size(PARTITION) == 0) {
                     return;
                 }
             }
@@ -299,7 +302,7 @@ class MatchingCrashTest {
         }
         long violated = partiesPerRequest.values().stream().filter(count -> count > 1).count();
 
-        Set<Long> stillWaiting = new HashSet<>(waiting.requestIds());
+        Set<Long> stillWaiting = new HashSet<>(waiting.requestIds(PARTITION));
         Set<Long> accountedFor = new HashSet<>(partiesPerRequest.keySet());
         accountedFor.addAll(stillWaiting);
 

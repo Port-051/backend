@@ -3,7 +3,10 @@ package com.port051.queuemate.matching.store;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import com.port051.queuemate.matching.domain.Partition;
+
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -51,16 +54,28 @@ public class RequestExpiry {
     public List<Long> sweep() {
         long threshold = clock.nowMillis() - maxWait.toMillis();
 
-        List<Long> expired = waitingList.requestIdsUpTo(threshold);
+        List<Long> expired = new ArrayList<>();
+        for (Partition partition : Partition.all()) {
+            expired.addAll(sweep(partition, threshold));
+        }
+        return List.copyOf(expired);
+    }
+
+    /** 한 조합만 정리한다. 인스턴스가 조합을 나눠 맡게 되면 이쪽을 부른다. */
+    public List<Long> sweep(Partition partition, long threshold) {
+        List<Long> expired = waitingList.requestIdsUpTo(partition, threshold);
         if (expired.isEmpty()) {
             return List.of();
         }
 
-        waitingList.removeUpTo(threshold);
-        for (long requestId : expired) {
-            requestStore.delete(requestId);
-        }
+        waitingList.removeUpTo(partition, threshold);
+        requestStore.deleteAll(expired);
         return expired;
+    }
+
+    /** 지금 기준의 만료 경계. 이 시각 이전에 신청한 요청이 만료 대상이다. */
+    public long threshold() {
+        return clock.nowMillis() - maxWait.toMillis();
     }
 
     /** 설정된 최대 대기시간. */

@@ -4,6 +4,7 @@ import com.port051.queuemate.matching.domain.GameQueue;
 import com.port051.queuemate.matching.domain.MatchRequest;
 import com.port051.queuemate.matching.domain.Party;
 import com.port051.queuemate.matching.domain.PartyMatcher;
+import com.port051.queuemate.matching.domain.Partition;
 import com.port051.queuemate.matching.domain.Position;
 import com.port051.queuemate.matching.domain.Purpose;
 import com.port051.queuemate.matching.domain.VoiceMode;
@@ -102,6 +103,8 @@ class MatchingLoadTest {
      */
     private static final Path OUTPUT =
             Path.of(System.getProperty("matching.load.out", "measurements/matching-load.csv"));
+
+    private static final Partition PARTITION = new Partition(GameQueue.SOLO_DUO, 2);
 
     @Autowired
     WaitingList waiting;
@@ -249,7 +252,7 @@ class MatchingLoadTest {
             long cycleBegan = System.nanoTime();
 
             // 1·2단계 — 명단을 읽고 메모를 본다.
-            List<MatchRequest> snapshot = waiting.requestIds().stream()
+            List<MatchRequest> snapshot = waiting.requestIds(PARTITION).stream()
                     .map(requests::find)
                     .flatMap(Optional::stream)
                     .toList();
@@ -263,7 +266,7 @@ class MatchingLoadTest {
                 }
                 // 4단계 — 확정. REMOVE는 선점이 곧 삭제라 여기서 또 지울 것이 없다.
                 if (guard != Guard.REMOVE) {
-                    memberIds.forEach(waiting::remove);
+                    memberIds.forEach(id -> waiting.remove(PARTITION, id));
                 }
                 confirmed.add(memberIds);
             }
@@ -285,7 +288,7 @@ class MatchingLoadTest {
     private boolean take(Guard guard, List<Long> memberIds) {
         return switch (guard) {
             case NONE -> true;
-            case REMOVE -> waiting.removeAll(memberIds);
+            case REMOVE -> waiting.removeAll(PARTITION, memberIds);
             case CLAIM -> claims.claimAll(memberIds).isPresent();
         };
     }

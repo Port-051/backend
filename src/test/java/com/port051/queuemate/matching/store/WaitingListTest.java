@@ -2,6 +2,7 @@ package com.port051.queuemate.matching.store;
 
 import com.port051.queuemate.matching.domain.GameQueue;
 import com.port051.queuemate.matching.domain.MatchRequest;
+import com.port051.queuemate.matching.domain.Partition;
 import com.port051.queuemate.matching.domain.Position;
 import com.port051.queuemate.matching.domain.Purpose;
 import com.port051.queuemate.matching.domain.VoiceMode;
@@ -32,6 +33,8 @@ class WaitingListTest {
     static GenericContainer<?> redis =
             new GenericContainer<>(DockerImageName.parse("redis:7-alpine")).withExposedPorts(6379);
 
+    private static final Partition PARTITION = new Partition(GameQueue.SOLO_DUO, 2);
+
     @Autowired
     WaitingList waitingList;
 
@@ -59,7 +62,7 @@ class WaitingListTest {
         waitingList.add(request(2L, 100));
         waitingList.add(request(3L, 200));
 
-        assertThat(waitingList.requestIds()).containsExactly(2L, 3L, 1L);
+        assertThat(waitingList.requestIds(PARTITION)).containsExactly(2L, 3L, 1L);
     }
 
     @Test
@@ -69,7 +72,7 @@ class WaitingListTest {
         waitingList.add(request(1L, 300));
         waitingList.add(request(2L, 100));
 
-        assertThat(waitingList.requestIds()).containsExactly(2L, 3L, 1L);
+        assertThat(waitingList.requestIds(PARTITION)).containsExactly(2L, 3L, 1L);
     }
 
     @Test
@@ -78,7 +81,7 @@ class WaitingListTest {
         waitingList.add(request(10L, 100));
         waitingList.add(request(9L, 100));
 
-        assertThat(waitingList.requestIds()).containsExactly(9L, 10L);
+        assertThat(waitingList.requestIds(PARTITION)).containsExactly(9L, 10L);
     }
 
     @Test
@@ -89,7 +92,7 @@ class WaitingListTest {
         waitingList.add(request(1L, 100));
         waitingList.add(request(10L, 100));
 
-        assertThat(waitingList.requestIds()).containsExactly(1L, 9L, 10L, 100L);
+        assertThat(waitingList.requestIds(PARTITION)).containsExactly(1L, 9L, 10L, 100L);
     }
 
     @Test
@@ -99,7 +102,7 @@ class WaitingListTest {
         waitingList.add(request(999_999_999_999_999_999L, 100));
         waitingList.add(request(1L, 100));
 
-        assertThat(waitingList.requestIds())
+        assertThat(waitingList.requestIds(PARTITION))
                 .containsExactly(1L, 999_999_999_999_999_999L, Long.MAX_VALUE);
     }
 
@@ -109,7 +112,7 @@ class WaitingListTest {
         waitingList.add(request(9L, 100));
 
         // 자리수를 채우지 않으면 같은 시각의 동률이 사전순으로 갈려 순서가 뒤집힌다.
-        assertThat(strings.opsForZSet().range("mq:instant", 0, -1))
+        assertThat(strings.opsForZSet().range("mq:SOLO_DUO:2", 0, -1))
                 .containsExactly("0000000000000000009");
     }
 
@@ -119,28 +122,28 @@ class WaitingListTest {
         waitingList.add(request(1L, 100));
         waitingList.add(request(2L, 200));
 
-        waitingList.remove(1L);
+        waitingList.remove(PARTITION, 1L);
 
-        assertThat(waitingList.requestIds()).containsExactly(2L);
+        assertThat(waitingList.requestIds(PARTITION)).containsExactly(2L);
     }
 
     @Test
     @DisplayName("없는 요청을 지워도 문제되지 않는다")
     void removingAMissingRequestIsFine() {
-        waitingList.remove(99999L);
+        waitingList.remove(PARTITION, 99999L);
 
-        assertThat(waitingList.requestIds()).isEmpty();
+        assertThat(waitingList.requestIds(PARTITION)).isEmpty();
     }
 
     @Test
     @DisplayName("대기 인원을 센다")
     void countsWaitingRequests() {
-        assertThat(waitingList.size()).isZero();
+        assertThat(waitingList.size(PARTITION)).isZero();
 
         waitingList.add(request(1L, 100));
         waitingList.add(request(2L, 200));
 
-        assertThat(waitingList.size()).isEqualTo(2);
+        assertThat(waitingList.size(PARTITION)).isEqualTo(2);
     }
 
     @Test
@@ -149,7 +152,7 @@ class WaitingListTest {
         waitingList.add(request(1L, 100));
         waitingList.add(request(1L, 100));
 
-        assertThat(waitingList.size()).isEqualTo(1);
+        assertThat(waitingList.size(PARTITION)).isEqualTo(1);
     }
 
     @Nested
@@ -163,9 +166,9 @@ class WaitingListTest {
             waitingList.add(request(2L, 200));
             waitingList.add(request(3L, 300));
 
-            assertThat(waitingList.removeAll(List.of(1L, 2L))).isTrue();
+            assertThat(waitingList.removeAll(PARTITION, List.of(1L, 2L))).isTrue();
 
-            assertThat(waitingList.requestIds()).containsExactly(3L);
+            assertThat(waitingList.requestIds(PARTITION)).containsExactly(3L);
         }
 
         @Test
@@ -173,7 +176,7 @@ class WaitingListTest {
         void failsWhenSomeoneIsGone() {
             waitingList.add(request(1L, 100));
 
-            assertThat(waitingList.removeAll(List.of(1L, 2L))).isFalse();
+            assertThat(waitingList.removeAll(PARTITION, List.of(1L, 2L))).isFalse();
         }
 
         @Test
@@ -182,9 +185,9 @@ class WaitingListTest {
             waitingList.add(request(1L, 100));
             waitingList.add(request(2L, 200));
 
-            waitingList.removeAll(List.of(1L, 2L, 3L));
+            waitingList.removeAll(PARTITION, List.of(1L, 2L, 3L));
 
-            assertThat(waitingList.requestIds()).containsExactly(1L, 2L);
+            assertThat(waitingList.requestIds(PARTITION)).containsExactly(1L, 2L);
         }
 
         @Test
@@ -193,9 +196,9 @@ class WaitingListTest {
             waitingList.add(request(1L, 100));
             waitingList.add(request(2L, 200));
 
-            waitingList.removeAll(List.of(1L, 2L, 99L));
+            waitingList.removeAll(PARTITION, List.of(1L, 2L, 99L));
 
-            assertThat(waitingList.requestIds()).containsExactly(1L, 2L);
+            assertThat(waitingList.requestIds(PARTITION)).containsExactly(1L, 2L);
         }
 
         @Test
@@ -203,9 +206,9 @@ class WaitingListTest {
         void emptyListRemovesNothing() {
             waitingList.add(request(1L, 100));
 
-            assertThat(waitingList.removeAll(List.of())).isFalse();
+            assertThat(waitingList.removeAll(PARTITION, List.of())).isFalse();
 
-            assertThat(waitingList.requestIds()).containsExactly(1L);
+            assertThat(waitingList.requestIds(PARTITION)).containsExactly(1L);
         }
 
         @Test
@@ -214,8 +217,8 @@ class WaitingListTest {
             waitingList.add(request(1L, 100));
             waitingList.add(request(2L, 200));
 
-            assertThat(waitingList.removeAll(List.of(1L, 2L))).isTrue();
-            assertThat(waitingList.removeAll(List.of(1L, 2L))).isFalse();
+            assertThat(waitingList.removeAll(PARTITION, List.of(1L, 2L))).isTrue();
+            assertThat(waitingList.removeAll(PARTITION, List.of(1L, 2L))).isFalse();
         }
     }
 }

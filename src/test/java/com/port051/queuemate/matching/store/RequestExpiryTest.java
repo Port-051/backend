@@ -2,6 +2,7 @@ package com.port051.queuemate.matching.store;
 
 import com.port051.queuemate.matching.domain.GameQueue;
 import com.port051.queuemate.matching.domain.MatchRequest;
+import com.port051.queuemate.matching.domain.Partition;
 import com.port051.queuemate.matching.domain.Position;
 import com.port051.queuemate.matching.domain.Purpose;
 import com.port051.queuemate.matching.domain.VoiceMode;
@@ -33,6 +34,8 @@ class RequestExpiryTest {
 
     @Autowired
     RequestExpiry expiry;
+
+    private static final Partition PARTITION = new Partition(GameQueue.SOLO_DUO, 2);
 
     @Autowired
     WaitingList waitingList;
@@ -90,7 +93,7 @@ class RequestExpiryTest {
         register(requestFrom(1L, 1_000));
 
         assertThat(expiry.sweep()).isEmpty();
-        assertThat(waitingList.requestIds()).containsExactly(1L);
+        assertThat(waitingList.requestIds(PARTITION)).containsExactly(1L);
         assertThat(requestStore.find(1L)).isPresent();
     }
 
@@ -103,7 +106,7 @@ class RequestExpiryTest {
         register(requestFrom(3L, 1_000));
 
         assertThat(expiry.sweep()).containsExactly(1L, 2L);
-        assertThat(waitingList.requestIds()).containsExactly(3L);
+        assertThat(waitingList.requestIds(PARTITION)).containsExactly(3L);
     }
 
     @Test
@@ -113,7 +116,7 @@ class RequestExpiryTest {
 
         expiry.sweep();
 
-        assertThat(waitingList.requestIds()).isEmpty();
+        assertThat(waitingList.requestIds(PARTITION)).isEmpty();
         assertThat(requestStore.find(1L)).isEmpty();
     }
 
@@ -123,7 +126,7 @@ class RequestExpiryTest {
         register(requestFrom(1L, 1_000));
 
         assertThat(expiry.sweep()).isEmpty();
-        assertThat(waitingList.size()).isEqualTo(1);
+        assertThat(waitingList.size(PARTITION)).isEqualTo(1);
     }
 
     @Test

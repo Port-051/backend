@@ -4,6 +4,7 @@ import com.port051.queuemate.matching.domain.GameQueue;
 import com.port051.queuemate.matching.domain.MatchRequest;
 import com.port051.queuemate.matching.domain.Party;
 import com.port051.queuemate.matching.domain.PartyMatcher;
+import com.port051.queuemate.matching.domain.Partition;
 import com.port051.queuemate.matching.domain.Position;
 import com.port051.queuemate.matching.domain.Purpose;
 import com.port051.queuemate.matching.domain.VoiceMode;
@@ -55,6 +56,8 @@ class MatchingRaceTest {
     static GenericContainer<?> redis =
             new GenericContainer<>(DockerImageName.parse("redis:7-alpine")).withExposedPorts(6379);
 
+    private static final Partition PARTITION = new Partition(GameQueue.SOLO_DUO, 2);
+
     @Autowired
     WaitingList waiting;
 
@@ -91,7 +94,7 @@ class MatchingRaceTest {
 
         // 명단만 보면 멀쩡하다. 같은 것을 두 번 지웠을 뿐이라 흔적이 남지 않는다.
         // 이 문제를 명단에서 찾을 수 없는 이유다.
-        assertThat(waiting.size()).isZero();
+        assertThat(waiting.size(PARTITION)).isZero();
     }
 
     @Test
@@ -102,7 +105,7 @@ class MatchingRaceTest {
         assertThat(confirmed.get(0).size() + confirmed.get(1).size())
                 .as("확정된 파티 수")
                 .isEqualTo(1);
-        assertThat(waiting.size()).isZero();
+        assertThat(waiting.size(PARTITION)).isZero();
     }
 
     /** 두 인스턴스가 같은 순간에 명단을 읽도록 맞춘 뒤 각자 한 바퀴를 돈다. */
@@ -128,7 +131,7 @@ class MatchingRaceTest {
      */
     private List<Party> cycle(CyclicBarrier read, boolean withClaim) throws Exception {
         // 1·2단계 — 명단을 읽고 메모를 본다.
-        List<MatchRequest> snapshot = waiting.requestIds().stream()
+        List<MatchRequest> snapshot = waiting.requestIds(PARTITION).stream()
                 .map(requests::find)
                 .flatMap(Optional::stream)
                 .toList();
@@ -142,7 +145,7 @@ class MatchingRaceTest {
                 continue;
             }
             // 4단계 — 확정. 명단에서 뺀다.
-            memberIds.forEach(waiting::remove);
+            waiting.removeAll(PARTITION, memberIds);
             confirmed.add(party);
         }
         return confirmed;

@@ -1,0 +1,18 @@
+# 테스트 설정. src/main 쪽 application.yml을 가린다.
+#
+# 배경 스케줄러를 끄는 것이 핵심이다. 켜져 있으면 1초마다 도는 매칭 루프가
+# 테스트가 준비한 대기 명단을 확인하기 전에 먹어 버린다.
+# 루프를 직접 확인하는 테스트는 MatchingTick.runOnce()를 원하는 시점에 부른다.
+spring:
+  application:
+    name: queuemate-matching-test
+  threads:
+    virtual:
+      enabled: true
+
+queuemate:
+  matching:
+    scheduled: false
+    max-wait: 5m
+    claim-ttl: 3s
+    tick: 1s

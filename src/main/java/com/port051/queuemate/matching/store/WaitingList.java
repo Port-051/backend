@@ -1,6 +1,7 @@
 package com.port051.queuemate.matching.store;
 
 import com.port051.queuemate.matching.domain.MatchRequest;
+import com.port051.queuemate.matching.domain.Partition;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.script.RedisScript;
@@ -10,10 +11,13 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * 대기 명단 {@code mq:...}. 05-realtime-matching-contract 1장 — "누가 먼저 왔는지 순서만".
+ * 대기 명단 {@code mq:{queue}:{targetSize}}. 05-realtime-matching-contract 1장 — "누가 먼저 왔는지 순서만".
+ *
+ * <p>명단은 하나가 아니라 {@link Partition}마다 따로 둔다. 4.1이 큐와 목표 인원이 다른 요청을
+ * 후보에서 제외하므로, 조합이 다른 요청을 한 줄에 세우면 매 틱 탈락시킬 비교만 늘어난다.
  *
  * <p>Sorted Set을 쓴다. score를 {@code requestedAt}으로 두면 Redis가 정렬을 대신 해 주므로
- * 매칭 루프는 앞에서부터 읽기만 하면 된다.
+ * 매칭 루프는 앞에서부터 읽기만 하면 된다. 만료도 score 범위 삭제 하나로 끝난다.
  *
  * <p><b>요청 ID를 자리수를 채운 문자열로 넣는 이유가 있다.</b> 4.3의 전순서는
  * {@code (신청 시각, 요청 ID)}인데 Sorted Set의 score는 숫자 하나뿐이라 두 값을 담을 수 없다.
@@ -55,14 +59,14 @@ public class WaitingList {
         this.redis = redis;
     }
 
-    /** 명단에 올린다. 이미 있으면 순서만 갱신된다. */
+    /** 명단에 올린다. 조합은 요청 자신이 정한다. 이미 있으면 순서만 갱신된다. */
     public void add(MatchRequest request) {
-        redis.opsForZSet().add(key(), member(request.requestId()), request.requestedAt());
+        redis.opsForZSet().add(key(Partition.of(request)), member(request.requestId()), request.requestedAt());
     }
 
     /** 명단에서 지운다. 취소 · 만료 · 파티 확정에서 부른다. */
-    public void remove(long requestId) {
-        redis.opsForZSet().remove(key(), member(requestId));
+    public void remove(Partition partition, long requestId) {
+        redis.opsForZSet().remove(key(partition), member(requestId));
     }
 
     /**
@@ -72,26 +76,23 @@ public class WaitingList {
      * <b>명단에서 빼내는 것 자체를 선점으로</b> 삼는다. 명단에서 사라지면 다른 인스턴스가
      * 그 요청을 후보로 잡을 수 없으므로 같은 사람이 두 파티에 들어가지 않는다.
      *
-     * <p>{@code ZREM}은 실제로 지운 개수를 돌려준다. 그 값이 요청한 수와 같을 때만
-     * 전원을 잡은 것이고, 하나라도 모자라면 <b>이미 지운 것을 되돌려 놓아야</b> 한다.
-     * 되돌리려면 원래 score를 알아야 하므로 지우기 전에 먼저 읽어 둔다.
-     * 이 확인·삭제·복구가 한 스크립트 안에서 끝나야 다른 인스턴스가 중간 상태를 보지 않는다.
+     * <p>확인과 삭제가 한 스크립트 안에서 끝나야 다른 인스턴스가 중간 상태를 보지 않는다.
+     * 자바에서 하나씩 지우면 둘이 서로 일부만 지운 채 양쪽 다 실패할 수 있다.
      *
      * @return 전원을 지웠으면 참. 빈 목록은 잡은 것이 없으므로 거짓이다
      */
-    public boolean removeAll(List<Long> requestIds) {
+    public boolean removeAll(Partition partition, List<Long> requestIds) {
         if (requestIds.isEmpty()) {
             return false;
         }
-        Long removed = redis.execute(REMOVE_ALL, List.of(key()),
+        Long removed = redis.execute(REMOVE_ALL, List.of(key(partition)),
                 requestIds.stream().map(WaitingList::member).toArray());
         return removed != null && removed == 1;
     }
 
     /** 대기 중인 요청 ID를 전순서대로 읽는다. */
-    public List<Long> requestIds() {
-        Set<String> members = redis.opsForZSet().range(key(), 0, -1);
-        return members == null ? List.of() : members.stream().map(Long::valueOf).toList();
+    public List<Long> requestIds(Partition partition) {
+        return toRequestIds(redis.opsForZSet().range(key(partition), 0, -1));
     }
 
     /**
@@ -100,9 +101,9 @@ public class WaitingList {
      * <p>score가 곧 {@code requestedAt}이므로 만료 판정이 <b>score 범위 조회</b>가 된다.
      * Sorted Set을 고른 값이 여기서 나온다. List였다면 전체를 훑어야 했다.
      */
-    public List<Long> requestIdsUpTo(long threshold) {
-        Set<String> members = redis.opsForZSet().rangeByScore(key(), Double.NEGATIVE_INFINITY, threshold);
-        return members == null ? List.of() : members.stream().map(Long::valueOf).toList();
+    public List<Long> requestIdsUpTo(Partition partition, long threshold) {
+        return toRequestIds(redis.opsForZSet()
+                .rangeByScore(key(partition), Double.NEGATIVE_INFINITY, threshold));
     }
 
     /**
@@ -113,15 +114,20 @@ public class WaitingList {
      *
      * @return 지운 개수
      */
-    public long removeUpTo(long threshold) {
-        Long removed = redis.opsForZSet().removeRangeByScore(key(), Double.NEGATIVE_INFINITY, threshold);
+    public long removeUpTo(Partition partition, long threshold) {
+        Long removed = redis.opsForZSet()
+                .removeRangeByScore(key(partition), Double.NEGATIVE_INFINITY, threshold);
         return removed == null ? 0 : removed;
     }
 
     /** 대기 인원. 3.1이 조건 입력 화면에 표시하라고 한 값이다. */
-    public long size() {
-        Long size = redis.opsForZSet().size(key());
+    public long size(Partition partition) {
+        Long size = redis.opsForZSet().size(key(partition));
         return size == null ? 0 : size;
+    }
+
+    private static List<Long> toRequestIds(Set<String> members) {
+        return members == null ? List.of() : members.stream().map(Long::valueOf).toList();
     }
 
     /** 사전순이 숫자 크기 순과 같아지도록 자리수를 채운다. */
@@ -129,7 +135,7 @@ public class WaitingList {
         return MEMBER_FORMAT.formatted(requestId);
     }
 
-    private static String key() {
-        return "mq:instant";
+    private static String key(Partition partition) {
+        return "mq:" + partition.queue() + ":" + partition.targetSize();
     }
 }
