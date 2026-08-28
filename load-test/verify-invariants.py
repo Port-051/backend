@@ -72,17 +72,6 @@ def main():
 
     violations = {}
 
-    # ── INV-1 정원 초과 ────────────────────────────────────────────────────
-    # 02 2장 — 이 위반은 7.4 빈자리 공개 모집 경로에서만 발생한다.
-    # 이슈 #48이 6·7장을 범위에서 뺐으므로 **이 스파이크에서는 구조적으로 0건이다.**
-    # 0건이 나왔다고 "제어가 잘 됐다"로 읽으면 안 된다. 잴 경로가 없는 것이다.
-    inv1 = [
-        {"partyId": pid, "targetSize": int(p["targetSize"]), "actual": len(members_by_party[pid])}
-        for pid, p in parties.items()
-        if len(members_by_party[pid]) > int(p["targetSize"])
-    ]
-    violations["INV-1 정원 초과"] = inv1
-
     # ── INV-2 시간이 겹치는 중복 배정 ──────────────────────────────────────
     # 한 사람이 시간이 겹치는 두 파티에 동시에 속하지 않는다.
     intervals = defaultdict(list)
@@ -140,6 +129,7 @@ def main():
     print("   맞지 않으면 위반 0건은 '안전해서'가 아니라 '잰 적이 없어서'다 (02 6.1).")
     print()
 
+    print("판정 대상 — 이슈 #48 판정 절차 1번")
     failed = False
     for name, found in violations.items():
         mark = "통과" if not found else f"탈락 ({len(found)}건)"
@@ -151,11 +141,15 @@ def main():
             if len(found) > 5:
                 print(f"      ... 외 {len(found) - 5}건")
 
+    # 이슈 #48 판정 절차 — "INV-1을 0건으로 적지 않는다. `해당 없음`으로 적는다."
+    # 0건이라고 쓰면 다음에 읽는 사람이 막아서 0건인 줄 안다. 세지도 않는 이유가 그것이다.
     print()
-    print("범위 밖 — 이 스파이크에서는 잴 수 없다")
-    print("  INV-1 은 01 7.4 빈자리 공개 모집 경로에서만 발생한다. 이슈 #48이 7장을 제외했으므로")
-    print("        위 0건은 '제어가 됐다'가 아니라 '경로가 없다'는 뜻이다.")
-    print("  INV-5 알림 중복 발송 — 01 8장이 범위 밖이다.")
+    print("판정 대상 아님 — 이 범위에는 위반이 발생할 코드가 없다")
+    print(f"  {'INV-1 정원 초과':28s} 해당 없음")
+    print("      02 2장 — 이 위반은 01 7.4 빈자리 공개 모집 경로에서만 발생한다.")
+    print("      7장이 범위 밖이라 좌석 경합이 일어날 코드 자체가 없다.")
+    print("      좌석 경합의 뼈대는 README 로드맵 1단계에서 고른다.")
+    print(f"  {'INV-5 알림 중복 발송':28s} 해당 없음   (01 8장이 범위 밖)")
     print("=" * 68)
 
     return 1 if failed else 0
