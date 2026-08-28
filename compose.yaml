@@ -1,0 +1,61 @@
+# 인스턴스 2대 구성. 02 1.2 — "모든 측정은 인스턴스 2대 이상에서 수행한다. 1대 측정값은
+# 비교군으로도 쓰지 않는다." 한 대면 애플리케이션 내부 락만으로 경합이 막혀 문제가 재현되지 않는다.
+#
+# 02 1.1의 구성도에서 이 스파이크에 필요한 것만 남겼다 — RDB는 쓰지 않고(이슈 #48),
+# 대신 LB가 반드시 있어야 한다. 요청을 두 인스턴스에 나누는 주체가 없으면
+# 경합이 왜 생기는지 설명되지 않고, SSE 연결이 한 인스턴스에 고정된다는 사실도 드러나지 않는다.
+#
+#   k6 ──▶ nginx ──┬──▶ app-1 ──┐
+#                  └──▶ app-2 ──┴──▶ redis
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  app-1:
+    build: .
+    environment:
+      REDIS_HOST: redis
+      INSTANCE_ID: app-1
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  app-2:
+    build: .
+    environment:
+      REDIS_HOST: redis
+      INSTANCE_ID: app-2
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  lb:
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./load-test/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      app-1:
+        condition: service_healthy
+      app-2:
+        condition: service_healthy

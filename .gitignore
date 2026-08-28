@@ -39,3 +39,6 @@ logs/
 results/**/raw/
 .vercel
 .env*
+
+# 스파이크 부하 측정 산출물
+load-test/results/

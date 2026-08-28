@@ -1,0 +1,62 @@
+spring:
+  application:
+    name: queuemate-spike
+  threads:
+    virtual:
+      enabled: true            # 04 2.1 — SSE 연결 하나가 플랫폼 스레드 하나를 잡아먹지 않게 한다
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      lettuce:
+        pool:
+          enabled: true
+          max-active: 32
+          max-idle: 16
+
+server:
+  port: ${SERVER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus   # 04 5장 — 계측은 0단계, 시각화는 2단계
+  metrics:
+    tags:
+      instance: ${INSTANCE_ID:app-1}
+
+queuemate:
+  matching:
+    tick: 200ms          # MatchingProperties의 주석에 근거를 적었다
+    batch-size: 500
+    claim-ttl: 5s
+    offer-ttl: 20s
+    max-wait: 5m
+    suppress-ttl: 10m    # 01 5.4 — 10분 고정
+    expiry-sweep: 200ms
+
+  # 01 3.5 — "구체적인 허용 범위는 설정 데이터로 관리하며 코드에 고정하지 않는다."
+  # 라이엇이 시즌마다 조정하므로 코드에 박으면 규칙이 바뀔 때마다 배포해야 한다.
+  #
+  # tierOrder: 아이언 IV = 1에서 디비전 단위로 1씩. 아이언~다이아가 1~28,
+  # 마스터 29 · 그랜드마스터 30 · 챌린저 31.
+  #
+  # maxGap: 두 사람의 tierOrder 차이 한도. 01 3.5의 세 가지 모양을 그대로 옮긴 것이다 —
+  #   낮은 구간은 티어 단위로 여러 단계(브론즈 이하 = 2티어 = 8디비전)
+  #   중간 구간은 한 티어 위아래(= 4디비전)
+  #   상위 구간은 디비전 단위(다이아 = 3디비전)
+  #
+  # ⚠️ 이 숫자는 미확인이다. 01 5.2가 "구현 전 현재 규칙을 재확인할 것"이라고 단서를 달았고
+  #    아직 확인하지 않았다. 판정일 전에 라이엇 지원 문서로 대조해야 한다.
+  tier:
+    highest-ranked-order: 28
+    bands:
+      - { max-order: 8,  max-gap: 8 }    # 아이언 · 브론즈
+      - { max-order: 16, max-gap: 4 }    # 실버 · 골드
+      - { max-order: 24, max-gap: 4 }    # 플래티넘 · 에메랄드
+      - { max-order: 28, max-gap: 3 }    # 다이아몬드
+
+logging:
+  level:
+    com.port051.queuemate: INFO
