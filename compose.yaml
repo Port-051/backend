@@ -25,6 +25,9 @@ services:
     environment:
       REDIS_HOST: redis
       INSTANCE_ID: app-1
+      # 측정할 때 최대 대기시간을 줄인다. 5분이면 성립률 곡선이 정상 상태에 닿기까지
+      # 구간마다 10분 넘게 돌려야 한다. 판정일에 다섯 구간을 못 돈다.
+      QUEUEMATE_MATCHING_MAXWAIT: ${MAX_WAIT:-5m}
     depends_on:
       redis:
         condition: service_healthy
@@ -39,6 +42,7 @@ services:
     environment:
       REDIS_HOST: redis
       INSTANCE_ID: app-2
+      QUEUEMATE_MATCHING_MAXWAIT: ${MAX_WAIT:-5m}
     depends_on:
       redis:
         condition: service_healthy
