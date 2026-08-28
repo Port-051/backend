@@ -94,19 +94,20 @@ class RedisScriptTest extends RedisTestBase {
                 List.of(Requests.at(1, Position.TOP), Requests.at(2, Position.MID));
         Map<Long, Position> positions = Map.of(1L, Position.TOP, 2L, Position.MID);
 
-        Optional<Long> first = parties.confirm(party, positions, System.currentTimeMillis());
-        assertThat(first).isPresent();
+        assertThat(parties.confirm(party, positions, System.currentTimeMillis()).isConfirmed())
+                .isTrue();
 
         // 2번을 다른 사람과 묶어 또 확정하려 한다. member:2가 이미 있으므로 막혀야 한다.
         List<MatchRequestPayload> overlapping =
                 List.of(Requests.at(2, Position.MID), Requests.at(3, Position.JUNGLE));
-        Optional<Long> second =
+        PartyRecorder.ConfirmResult second =
                 parties.confirm(
                         overlapping,
                         Map.of(2L, Position.MID, 3L, Position.JUNGLE),
                         System.currentTimeMillis());
 
-        assertThat(second).isEmpty();
+        assertThat(second.isConfirmed()).isFalse();
+        assertThat(second.blockedBy()).contains("INV-3");
         // 부분 반영이 없어야 한다 — 3번은 어느 파티에도 들어가지 않았다.
         assertThat(redis.hasKey(RedisKeys.member(3L))).isFalse();
         assertThat(redis.opsForSet().size(RedisKeys.PARTY_INDEX)).isEqualTo(1);
@@ -118,13 +119,14 @@ class RedisScriptTest extends RedisTestBase {
         List<MatchRequestPayload> party =
                 List.of(Requests.at(1, Position.MID), Requests.at(2, Position.MID));
 
-        Optional<Long> result =
+        PartyRecorder.ConfirmResult result =
                 parties.confirm(
                         party,
                         Map.of(1L, Position.MID, 2L, Position.MID),
                         System.currentTimeMillis());
 
-        assertThat(result).isEmpty();
+        assertThat(result.isConfirmed()).isFalse();
+        assertThat(result.blockedBy()).contains("INV-4");
         assertThat(redis.opsForSet().size(RedisKeys.PARTY_INDEX)).isZero();
     }
 
@@ -136,8 +138,8 @@ class RedisScriptTest extends RedisTestBase {
         // 1번 사용자가 90분짜리 파티에 들어간다 (Requests.at의 playMinutes = 120).
         List<MatchRequestPayload> first =
                 List.of(Requests.at(1, Position.TOP), Requests.at(2, Position.MID));
-        assertThat(parties.confirm(first, Map.of(1L, Position.TOP, 2L, Position.MID), now))
-                .isPresent();
+        assertThat(parties.confirm(first, Map.of(1L, Position.TOP, 2L, Position.MID), now).isConfirmed())
+                .isTrue();
 
         // 같은 사용자(userId 1)가 새 요청(requestId 11)으로 다시 묶이려 한다.
         // requestId가 다르니 INV-3에는 안 걸리지만, 시간이 겹치므로 막혀야 한다.
@@ -149,12 +151,11 @@ class RedisScriptTest extends RedisTestBase {
         List<MatchRequestPayload> overlapping =
                 List.of(sameUserAgain, Requests.at(12, Position.MID));
 
-        assertThat(
-                        parties.confirm(
-                                overlapping,
-                                Map.of(11L, Position.TOP, 12L, Position.MID),
-                                now + 1000))
-                .isEmpty();
+        PartyRecorder.ConfirmResult blocked =
+                parties.confirm(
+                        overlapping, Map.of(11L, Position.TOP, 12L, Position.MID), now + 1000);
+        assertThat(blocked.isConfirmed()).isFalse();
+        assertThat(blocked.blockedBy()).contains("INV-2");
         assertThat(redis.opsForSet().size(RedisKeys.PARTY_INDEX)).isEqualTo(1);
     }
 
@@ -165,8 +166,8 @@ class RedisScriptTest extends RedisTestBase {
 
         List<MatchRequestPayload> first =
                 List.of(Requests.at(1, Position.TOP), Requests.at(2, Position.MID));
-        assertThat(parties.confirm(first, Map.of(1L, Position.TOP, 2L, Position.MID), now))
-                .isPresent();
+        assertThat(parties.confirm(first, Map.of(1L, Position.TOP, 2L, Position.MID), now).isConfirmed())
+                .isTrue();
 
         // 앞 파티는 now + 120분에 끝난다. 그 뒤에 시작하는 파티는 겹치지 않는다.
         long afterFirstEnds = now + 121 * 60_000L;
@@ -178,10 +179,11 @@ class RedisScriptTest extends RedisTestBase {
 
         assertThat(
                         parties.confirm(
-                                List.of(sameUserLater, Requests.at(12, Position.MID)),
-                                Map.of(11L, Position.TOP, 12L, Position.MID),
-                                afterFirstEnds))
-                .isPresent();
+                                        List.of(sameUserLater, Requests.at(12, Position.MID)),
+                                        Map.of(11L, Position.TOP, 12L, Position.MID),
+                                        afterFirstEnds)
+                                .isConfirmed())
+                .isTrue();
         assertThat(redis.opsForSet().size(RedisKeys.PARTY_INDEX)).isEqualTo(2);
     }
 
@@ -208,7 +210,7 @@ class RedisScriptTest extends RedisTestBase {
                                         party,
                                         Map.of(100L, Position.TOP, partner, Position.MID),
                                         System.currentTimeMillis())
-                                .isPresent()) {
+                                .isConfirmed()) {
                             confirmed.incrementAndGet();
                         }
                     } catch (InterruptedException e) {

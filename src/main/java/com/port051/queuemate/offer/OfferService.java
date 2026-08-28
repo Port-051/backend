@@ -134,15 +134,19 @@ public class OfferService {
             return;
         }
 
-        Optional<Long> partyId = parties.confirm(party, offer.members(), now);
-        if (partyId.isEmpty()) {
-            // confirm_party.lua가 막았다 — 이 요청 중 하나가 이미 다른 파티에 들어가 있다.
-            // INV-3이 실제로 작동한 것이므로 위반이 아니라 정상 경로다.
-            log.info("확정이 INV-3에 막혔다 offerId={} — 참가자를 재대기시킨다", offer.offerId());
+        PartyRecorder.ConfirmResult result = parties.confirm(party, offer.members(), now);
+        if (!result.isConfirmed()) {
+            // 제약이 실제로 막은 것이므로 위반이 아니라 정상 경로다.
+            // 어느 제약이 막았는지 남긴다 — 판정일에 이 분포가 비교 자료가 된다.
+            log.info(
+                    "확정이 {}에 막혔다 offerId={} — 참가자를 재대기시킨다",
+                    result.blockedBy(),
+                    offer.offerId());
             offers.markStatus(offer.offerId(), OfferStatus.EXPIRED);
             requeueAll(party, List.of());
             return;
         }
+        long partyId = result.partyId().orElseThrow();
 
         offers.markStatus(offer.offerId(), OfferStatus.CONFIRMED);
 
@@ -158,7 +162,7 @@ public class OfferService {
                                     member.requestId(),
                                     offer.offerId(),
                                     data)
-                            .withParty(partyId.get()));
+                            .withParty(partyId));
         }
         fanout.publishAll(events);
     }

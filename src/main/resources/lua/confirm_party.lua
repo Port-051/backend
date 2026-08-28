@@ -10,7 +10,14 @@
 --       [8] 참가자 수 n
 --       그다음 n개씩 세 묶음: requestId..., userId..., position...
 --
--- 반환  1 = 확정, 0 = 이미 배정된 요청이나 겹치는 포지션이 있어 중단
+-- 반환   1 = 확정
+--        0 = INV-3에 막혔다 — 이미 다른 파티에 배정된 요청이 있다
+--       -1 = INV-4에 막혔다 — 파티 안에서 포지션이 겹친다
+--       -2 = INV-2에 막혔다 — 시간이 겹치는 확정 파티에 이미 속한 사람이 있다
+--
+-- 어느 제약에 막혔는지 구분해서 돌려준다. 판정일에 "확정이 막혔다"만 남으면
+-- 무엇이 실제로 일하고 있는지 알 수 없다. 셋은 발생 원인이 완전히 다르다 —
+-- INV-3은 인스턴스 간 경합, INV-4는 배정 버그, INV-2는 사전 필터가 놓친 것이다.
 --
 -- 선점(claim)을 여기서 확인하지 않는다. 제안이 만들어지는 순간 참가자는 이미 대기 명단에서
 -- 빠지므로 선점은 그 전까지만 필요하고, 수락을 기다리는 20초 사이에 TTL 5초짜리 선점은
@@ -58,7 +65,7 @@ end
 local seen = {}
 for i = 1, n do
   if seen[positions[i]] then
-    return 0
+    return -1
   end
   seen[positions[i]] = true
 end
@@ -77,7 +84,7 @@ for i = 1, n do
     local sep = string.find(held[j], '|')
     local heldStart = tonumber(string.sub(held[j], sep + 1))
     if heldStart < endAt then
-      return 0
+      return -2
     end
   end
 end

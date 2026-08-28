@@ -57,9 +57,9 @@ public class PartyRecorder {
      * 무엇을 쓸지 정하지 않았다. 가장 긴 쪽을 쓰면 먼저 빠져야 하는 사람의 시간이 파티에 묶여
      * INV-2(시간 겹침)의 판정이 실제보다 넓어진다. 짧은 쪽이 안전한 방향이다.
      *
-     * @return 확정했으면 partyId, 이미 배정된 요청이 있어 중단했으면 비어 있음
+     * @return 확정 결과. 막혔으면 어느 불변식이 막았는지 함께 들어 있다
      */
-    public java.util.Optional<Long> confirm(
+    public ConfirmResult confirm(
             List<MatchRequestPayload> party, Map<Long, Position> positions, long startAt) {
 
         long partyId = nextPartyId();
@@ -96,8 +96,34 @@ public class PartyRecorder {
                                 RedisKeys.waitingQueue(base.queue(), base.targetSize())),
                         args.toArray());
 
-        return result != null && result == 1L
-                ? java.util.Optional.of(partyId)
-                : java.util.Optional.empty();
+        long code = result == null ? 0L : result;
+        return switch ((int) code) {
+            case 1 -> ConfirmResult.confirmed(partyId);
+            case -1 -> ConfirmResult.blocked("INV-4 포지션 중복");
+            case -2 -> ConfirmResult.blocked("INV-2 시간 겹침 중복 배정");
+            default -> ConfirmResult.blocked("INV-3 요청 단일 배정");
+        };
+    }
+
+    /**
+     * 확정 결과.
+     *
+     * <p>막힌 경우 <b>어느 불변식이 막았는지</b>를 들고 있다. 셋은 원인이 완전히 다르다 —
+     * INV-3은 두 인스턴스가 같은 요청으로 파티를 짜다 하나가 진 것(정상 경로),
+     * INV-4는 배정 로직의 버그, INV-2는 후보 사전 필터가 놓친 것이다.
+     * 구분하지 않으면 판정일에 "확정이 막혔다" 로그만 남아 무엇이 일하는지 알 수 없다.
+     */
+    public record ConfirmResult(java.util.Optional<Long> partyId, String blockedBy) {
+        static ConfirmResult confirmed(long partyId) {
+            return new ConfirmResult(java.util.Optional.of(partyId), null);
+        }
+
+        static ConfirmResult blocked(String invariant) {
+            return new ConfirmResult(java.util.Optional.empty(), invariant);
+        }
+
+        public boolean isConfirmed() {
+            return partyId.isPresent();
+        }
     }
 }
