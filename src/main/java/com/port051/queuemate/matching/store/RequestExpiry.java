@@ -77,8 +77,8 @@ public class RequestExpiry {
         // 그 정보가 메모 안에만 있다. 명단에서 빼기 전에 읽어 둔다.
         List<MatchRequest> candidates = requestStore.findAll(waitingList.requestIdsUpTo(partition, threshold));
 
-        // 실제로 지운 것만 돌아온다. 다른 인스턴스가 먼저 지웠으면 빈 목록이다.
-        List<Long> swept = waitingList.sweepUpTo(partition, threshold);
+        // 실제로 지운 것만 돌아온다. 다른 인스턴스가 먼저 지웠거나 배정 중인 요청은 빠진다.
+        List<Long> swept = waitingList.sweepUpTo(partition, threshold, ClaimStore.KEY_PREFIX);
         if (swept.isEmpty()) {
             return List.of();
         }

@@ -43,6 +43,9 @@ class RequestExpiryTest {
     private static final Partition PARTITION = new Partition(GameQueue.SOLO_DUO, 2);
 
     @Autowired
+    ClaimStore claims;
+
+    @Autowired
     WaitingList waitingList;
 
     @Autowired
@@ -147,6 +150,21 @@ class RequestExpiryTest {
 
         assertThat(expiry.sweep()).containsExactly(1L);
         assertThat(expiry.sweep()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("배정 중인 요청은 만료시키지 않는다")
+    void neverExpiresARequestBeingConfirmed() {
+        long expiredAt = clock.nowMillis() - expiry.maxWait().toMillis() - 1_000;
+        register(requestAt(1L, expiredAt));
+        register(requestAt(2L, expiredAt));
+        // 다른 인스턴스가 1번으로 파티를 확정하는 중이다.
+        claims.claimAll(List.of(1L));
+
+        assertThat(expiry.sweep()).containsExactly(2L);
+        // 1번은 명단에 남는다. 확정되면 거기서 빠지고, 실패하면 다음 바퀴에 만료된다.
+        assertThat(waitingList.requestIds(PARTITION)).containsExactly(1L);
+        assertThat(requestStore.find(1L)).isPresent();
     }
 
     @Test

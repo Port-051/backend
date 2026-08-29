@@ -30,6 +30,15 @@ import java.util.UUID;
 public class ClaimStore {
 
     /**
+     * 표시 키의 접두사.
+     *
+     * <p>만료를 쓸어낼 때 표시가 걸린 요청을 건너뛰어야 하는데, 그 판단이
+     * 명단을 다루는 스크립트 안에서 일어난다. 두 곳이 같은 키 이름을 알아야 하므로
+     * 여기서 한 번 정의하고 넘겨 준다.
+     */
+    public static final String KEY_PREFIX = "claim:";
+
+    /**
      * 전원을 잡거나 아무도 잡지 않는다.
      *
      * <p>전부 확인한 뒤에 전부 설정한다. 중간에 다른 명령이 끼어들 수 없으므로
@@ -116,6 +125,6 @@ public class ClaimStore {
     }
 
     private static String key(long requestId) {
-        return "claim:" + requestId;
+        return KEY_PREFIX + requestId;
     }
 }

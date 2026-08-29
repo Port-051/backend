@@ -54,7 +54,9 @@ public class WaitingList {
             """, Long.class);
 
     /**
-     * 만료된 것을 지우고, 지운 목록을 돌려준다.
+     * 만료된 것 중 배정 중 표시가 없는 것만 지우고, 지운 목록을 돌려준다.
+     *
+     * <p>표시 확인과 삭제가 한 스크립트 안에 있어야 그 사이에 표시가 생기지 않는다.
      *
      * <p>멤버는 자리수를 채운 문자열이라 요청 ID로 되돌리려면 앞의 0을 떼야 한다.
      * {@code tonumber}는 큰 수를 지수 표기로 되돌려 값이 어긋나므로 문자열로 자른다.
@@ -64,8 +66,11 @@ public class WaitingList {
             local expired = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
             local swept = {}
             for i = 1, #expired do
-              if redis.call('ZREM', KEYS[1], expired[i]) == 1 then
-                swept[#swept + 1] = string.gsub(expired[i], '^0+', '')
+              local requestId = string.gsub(expired[i], '^0+', '')
+              if redis.call('EXISTS', ARGV[2] .. requestId) == 0 then
+                if redis.call('ZREM', KEYS[1], expired[i]) == 1 then
+                  swept[#swept + 1] = requestId
+                end
               end
             end
             return swept
@@ -134,13 +139,22 @@ public class WaitingList {
      * <p>{@code ZREM}은 실제로 뺐으면 1, 이미 없었으면 0을 돌려준다. 그 값이 심판이다.
      * 동시에 들어와도 1을 받는 쪽은 정확히 하나이므로, 그 쪽만 목록에 담으면 중복이 사라진다.
      *
+     * <p>배정 중 표시가 걸린 요청은 건너뛴다. 파티가 곧 성립할 참인데 여기서 빼내면
+     * 그 파티가 깨지고, 1초만 더 있었으면 매칭됐을 사람이 실패 처리된다.
+     * 건너뛴 요청은 명단에 남아 확정되면 거기서 빠지고, 확정이 실패하면 다음 바퀴에 만료된다.
+     *
+     * <p><b>여기서 원자성이 필요하다.</b> 자바에서 표시를 확인하고 지우면 그 사이에 표시가
+     * 생길 수 있다. 스크립트 안에서는 Redis가 다른 명령을 받지 않으므로 그 틈이 없다.
+     *
      * <p>개별 항목에 TTL을 걸 수 없어 이 방식을 쓴다. Redis의 TTL은 <b>키 단위</b>라
      * Sorted Set에 걸면 대기 명단 전체가 사라진다.
      *
+     * @param claimKeyPrefix 배정 중 표시의 키 접두사. {@code ClaimStore.KEY_PREFIX}
      * @return 이 호출이 실제로 지운 요청 ID
      */
-    public List<Long> sweepUpTo(Partition partition, long threshold) {
-        List<String> swept = redis.execute(SWEEP_UP_TO, List.of(key(partition)), String.valueOf(threshold));
+    public List<Long> sweepUpTo(Partition partition, long threshold, String claimKeyPrefix) {
+        List<String> swept = redis.execute(SWEEP_UP_TO, List.of(key(partition)),
+                String.valueOf(threshold), claimKeyPrefix);
         return swept == null ? List.of() : swept.stream().map(Long::valueOf).toList();
     }
 
