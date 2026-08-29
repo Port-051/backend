@@ -18,7 +18,12 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -142,6 +147,39 @@ class RequestExpiryTest {
 
         assertThat(expiry.sweep()).containsExactly(1L);
         assertThat(expiry.sweep()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("동시에 쓸어도 한 쪽만 만료 목록을 받는다")
+    void onlyOneSweeperClaimsTheExpiredRequests() throws Exception {
+        long expiredAt = clock.nowMillis() - expiry.maxWait().toMillis() - 1_000;
+        for (long id = 1; id <= 10; id++) {
+            register(requestAt(id, expiredAt));
+        }
+
+        ExecutorService pool = Executors.newFixedThreadPool(4);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            List<Future<List<Long>>> sweeps = new ArrayList<>();
+            for (int i = 0; i < 4; i++) {
+                sweeps.add(pool.submit(() -> {
+                    start.await();
+                    return expiry.sweep();
+                }));
+            }
+            start.countDown();
+
+            List<Long> reported = new ArrayList<>();
+            for (Future<List<Long>> sweep : sweeps) {
+                reported.addAll(sweep.get());
+            }
+
+            // 같은 요청을 두 번 만료시켰다면 사용자에게 소식도 두 번 간다.
+            assertThat(reported).doesNotHaveDuplicates();
+            assertThat(reported).hasSize(10);
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     @Test

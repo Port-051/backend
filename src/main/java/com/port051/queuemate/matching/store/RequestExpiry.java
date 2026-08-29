@@ -11,6 +11,7 @@ import com.port051.queuemate.matching.sse.MatchingEvent;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * 최대 대기시간이 지난 즉시 매칭 요청을 종료한다. 01-functional-spec-mvp 10.2.
@@ -72,21 +73,28 @@ public class RequestExpiry {
 
     /** 한 조합만 정리한다. 인스턴스가 조합을 나눠 맡게 되면 이쪽을 부른다. */
     public List<Long> sweep(Partition partition, long threshold) {
-        List<Long> expired = waitingList.requestIdsUpTo(partition, threshold);
-        if (expired.isEmpty()) {
+        // 알리려면 어떤 조건이었는지, 대기 자리를 비우려면 누구 것인지 알아야 하는데
+        // 그 정보가 메모 안에만 있다. 명단에서 빼기 전에 읽어 둔다.
+        List<MatchRequest> candidates = requestStore.findAll(waitingList.requestIdsUpTo(partition, threshold));
+
+        // 실제로 지운 것만 돌아온다. 다른 인스턴스가 먼저 지웠으면 빈 목록이다.
+        List<Long> swept = waitingList.sweepUpTo(partition, threshold);
+        if (swept.isEmpty()) {
             return List.of();
         }
 
-        // 지우기 전에 읽어 둔다. 대기 자리를 비우려면 누구 것인지, 만료를 알리려면 어떤 조건이었는지
-        // 알아야 하는데 그 정보가 메모 안에만 있다. 메모를 먼저 지우면 둘 다 할 수 없다.
-        List<MatchRequest> requests = requestStore.findAll(expired);
+        // 뒤따르는 일은 전부 "내가 지운 것"을 기준으로 한다. 본 것을 기준으로 하면
+        // 두 인스턴스가 같은 요청을 함께 처리하고 같은 소식을 두 번 보낸다.
+        Set<Long> sweptIds = Set.copyOf(swept);
+        List<MatchRequest> expired = candidates.stream()
+                .filter(request -> sweptIds.contains(request.requestId()))
+                .toList();
 
-        waitingList.removeUpTo(partition, threshold);
-        requestStore.deleteAll(expired);
-        userGuard.releaseAll(requests.stream().map(MatchRequest::userId).toList());
-        // 정리가 끝난 뒤에 알린다(02 3.2).
-        events.publishAll(requests.stream().map(MatchingEvent::expired).toList());
-        return expired;
+        requestStore.deleteAll(swept);
+        userGuard.releaseAll(expired.stream().map(MatchRequest::userId).toList());
+        // 정리가 끝난 뒤에 알린다(02 3.2). 지운 쪽만 알리므로 같은 소식이 두 번 가지 않는다.
+        events.publishAll(expired.stream().map(MatchingEvent::expired).toList());
+        return swept;
     }
 
     /** 지금 기준의 만료 경계. 이 시각 이전에 신청한 요청이 만료 대상이다. */

@@ -53,6 +53,24 @@ public class WaitingList {
             return 1
             """, Long.class);
 
+    /**
+     * 만료된 것을 지우고, 지운 목록을 돌려준다.
+     *
+     * <p>멤버는 자리수를 채운 문자열이라 요청 ID로 되돌리려면 앞의 0을 떼야 한다.
+     * {@code tonumber}는 큰 수를 지수 표기로 되돌려 값이 어긋나므로 문자열로 자른다.
+     */
+    @SuppressWarnings("rawtypes")
+    private static final RedisScript<List> SWEEP_UP_TO = new DefaultRedisScript<>("""
+            local expired = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
+            local swept = {}
+            for i = 1, #expired do
+              if redis.call('ZREM', KEYS[1], expired[i]) == 1 then
+                swept[#swept + 1] = string.gsub(expired[i], '^0+', '')
+              end
+            end
+            return swept
+            """, List.class);
+
     private final StringRedisTemplate redis;
 
     public WaitingList(StringRedisTemplate redis) {
@@ -96,7 +114,7 @@ public class WaitingList {
     }
 
     /**
-     * 신청 시각이 {@code threshold} 이하인 요청 ID. 만료 대상을 고르는 데 쓴다.
+     * 신청 시각이 {@code threshold} 이하인 요청 ID. 지우지는 않는다.
      *
      * <p>score가 곧 {@code requestedAt}이므로 만료 판정이 <b>score 범위 조회</b>가 된다.
      * Sorted Set을 고른 값이 여기서 나온다. List였다면 전체를 훑어야 했다.
@@ -107,17 +125,23 @@ public class WaitingList {
     }
 
     /**
-     * 신청 시각이 {@code threshold} 이하인 요청을 명단에서 한 번에 지운다.
+     * 만료된 요청을 명단에서 지우고 <b>실제로 지운 것만</b> 돌려준다.
+     *
+     * <p>조회와 삭제를 따로 하면 두 인스턴스가 같은 요청을 둘 다 "내가 만료시켰다"고 여긴다.
+     * 지우기 자체는 멱등이라 정합성은 멀쩡하지만, 만료를 사용자에게 알리는 순간
+     * <b>같은 사람에게 같은 소식이 두 번</b> 간다.
+     *
+     * <p>{@code ZREM}은 실제로 뺐으면 1, 이미 없었으면 0을 돌려준다. 그 값이 심판이다.
+     * 동시에 들어와도 1을 받는 쪽은 정확히 하나이므로, 그 쪽만 목록에 담으면 중복이 사라진다.
      *
      * <p>개별 항목에 TTL을 걸 수 없어 이 방식을 쓴다. Redis의 TTL은 <b>키 단위</b>라
      * Sorted Set에 걸면 대기 명단 전체가 사라진다.
      *
-     * @return 지운 개수
+     * @return 이 호출이 실제로 지운 요청 ID
      */
-    public long removeUpTo(Partition partition, long threshold) {
-        Long removed = redis.opsForZSet()
-                .removeRangeByScore(key(partition), Double.NEGATIVE_INFINITY, threshold);
-        return removed == null ? 0 : removed;
+    public List<Long> sweepUpTo(Partition partition, long threshold) {
+        List<String> swept = redis.execute(SWEEP_UP_TO, List.of(key(partition)), String.valueOf(threshold));
+        return swept == null ? List.of() : swept.stream().map(Long::valueOf).toList();
     }
 
     /** 대기 인원. 3.1이 조건 입력 화면에 표시하라고 한 값이다. */
