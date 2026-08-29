@@ -1,10 +1,12 @@
 package com.port051.queuemate.matching.store;
 
 import com.port051.queuemate.matching.domain.MatchRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -30,14 +32,32 @@ public class RequestStore {
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private final StringRedisTemplate redis;
+    private final Duration ttl;
 
-    public RequestStore(StringRedisTemplate redis) {
+    public RequestStore(StringRedisTemplate redis,
+                        @Value("${queuemate.matching.request-ttl:6m}") Duration ttl) {
         this.redis = redis;
+        this.ttl = ttl;
     }
 
-    /** 요청을 저장한다. 같은 요청 ID가 이미 있으면 덮어쓴다. */
+    /** 설정된 메모 유지 시간. */
+    public Duration ttl() {
+        return ttl;
+    }
+
+    /**
+     * 요청을 저장한다. 같은 요청 ID가 이미 있으면 덮어쓴다.
+     *
+     * <p><b>유지 시간을 거는 이유는 안전망이다.</b> 정상 경로에서는 취소·만료·파티 확정이
+     * 이 메모를 지운다. 그러나 그 중간에 인스턴스가 죽으면 명단에서는 빠졌는데 메모만 남는다.
+     * 매칭은 명단만 보므로 동작에 지장은 없지만 그만큼 메모리가 샌다.
+     *
+     * <p>유지 시간이 <b>최대 대기시간보다 길어야</b> 한다. 짧으면 아직 대기 중인 요청의 메모가
+     * 먼저 사라진다. 매칭 루프는 명단에서 ID를 읽고 메모에서 조건을 채우므로, 메모가 없으면
+     * 그 요청은 후보로 잡히지 않는다. 명단에는 남아 있으니 만료될 때까지 자리만 차지하는 유령이 된다.
+     */
     public void save(MatchRequest request) {
-        redis.opsForValue().set(key(request.requestId()), JSON.writeValueAsString(request));
+        redis.opsForValue().set(key(request.requestId()), JSON.writeValueAsString(request), ttl);
     }
 
     /** 요청을 읽는다. 취소·만료·확정으로 이미 지워졌으면 빈 값이다. */

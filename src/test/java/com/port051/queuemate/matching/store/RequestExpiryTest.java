@@ -153,6 +153,18 @@ class RequestExpiryTest {
     }
 
     @Test
+    @DisplayName("메모에 유지 시간이 걸려 있다")
+    void requestMemosCarryATtl() {
+        register(requestFrom(1L, 0));
+
+        Long remaining = strings.getExpire("req:1", java.util.concurrent.TimeUnit.MILLISECONDS);
+
+        assertThat(remaining).isPositive();
+        // 최대 대기시간보다 길어야 대기 중인 요청의 조건이 먼저 사라지지 않는다.
+        assertThat(requestStore.ttl()).isGreaterThan(expiry.maxWait());
+    }
+
+    @Test
     @DisplayName("배정 중인 요청은 만료시키지 않는다")
     void neverExpiresARequestBeingConfirmed() {
         long expiredAt = clock.nowMillis() - expiry.maxWait().toMillis() - 1_000;
